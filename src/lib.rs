@@ -59,12 +59,12 @@ impl VM {
     }
 
     fn add_reg(&mut self, dr: Reg, sr1: Reg, sr2: Reg) {
-        let result = self.registers[&sr1] + self.registers[&sr2];
+        let result = self.registers[&sr1].wrapping_add(self.registers[&sr2]);
         self.registers.insert(dr, result);
     }
 
     fn add_const(&mut self, dr: Reg, sr1: Reg, value: u16) {
-        let result = self.registers[&sr1] + value;
+        let result = self.registers[&sr1].wrapping_add(value);
         self.registers.insert(dr, result);
     }
 
@@ -133,11 +133,19 @@ impl Default for Memory {
 #[derive(Debug, PartialEq)]
 enum Op {
     Br,
-    Add { dr: Reg, sr: Reg, variant: RegOrConst },
+    Add {
+        dr: Reg,
+        sr: Reg,
+        variant: RegOrConst,
+    },
     Ld,
     St,
     Jsr,
-    And { dr: Reg, sr: Reg, variant: RegOrConst },
+    And {
+        dr: Reg,
+        sr: Reg,
+        variant: RegOrConst,
+    },
     Ldr,
     Str,
     Rti,
@@ -254,7 +262,7 @@ impl From<u16> for Op {
                         variant: RegOrConst::Reg(Reg::sr2(instruction)),
                     }
                 }
-            },
+            }
             0b0110 => Op::Ldr,
             0b0111 => Op::Str,
             0b1000 => Op::Rti,
@@ -293,25 +301,30 @@ mod tests {
 
         vm.registers.insert(Reg::R1, 0b0000000000000100); // 4
         vm.registers.insert(Reg::R2, 0b0000000000000011); // 3
-
         vm.exec(Op::Add {
             dr: Reg::R0,
             sr: Reg::R1,
             variant: RegOrConst::Reg(Reg::R2),
         });
-
         assert_eq!(vm.registers[&Reg::R0], 0b0000000000000111); // 7
 
-        vm.registers.insert(Reg::R1, 0b1111111111111100); // -4
-        vm.registers.insert(Reg::R2, 0b0000000000000011); // 3
-
+        vm.registers.insert(Reg::R3, 0b1111111111111100); // -4
+        vm.registers.insert(Reg::R4, 0b0000000000000011); // 3
         vm.exec(Op::Add {
             dr: Reg::R0,
-            sr: Reg::R1,
-            variant: RegOrConst::Reg(Reg::R2),
+            sr: Reg::R3,
+            variant: RegOrConst::Reg(Reg::R4),
         });
-
         assert_eq!(vm.registers[&Reg::R0], 0b1111111111111111); // -1
+
+        vm.registers.insert(Reg::R6, 0b1111111111111111); // -1
+        vm.registers.insert(Reg::R7, 0b1111111111111111); // -1
+        vm.exec(Op::Add {
+            dr: Reg::R0,
+            sr: Reg::R7,
+            variant: RegOrConst::Reg(Reg::R6),
+        });
+        assert_eq!(vm.registers[&Reg::R0], 0b1111111111111110); // -2
     }
 
     #[test]
