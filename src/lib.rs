@@ -5,6 +5,7 @@ pub const PC_START: u16 = 0x3000;
 pub struct VM {
     memory: Memory,
     registers: HashMap<Reg, u16>,
+    halt: bool,
 }
 
 impl VM {
@@ -12,11 +13,17 @@ impl VM {
         self.memory.load(program)
     }
     pub fn run(&mut self) {
-        loop {
+        while !self.halt {
             let current_addr = self.registers[&Reg::Rpc];
+            let next_addr = self.registers[&Reg::Rpc] + 1;
+            self.registers.insert(Reg::Rpc, next_addr) ;
             let instruction = self.memory.read(current_addr);
 
+            print!("Instruction: {instruction:016b}.");
+
             let op: Op = instruction.into();
+
+            println!(" Decoded as op: {op:?}");
 
             self.exec(op);
         }
@@ -29,6 +36,7 @@ impl VM {
                 sr1,
                 variant: Add::AddReg(sr2),
             } => self.add_reg(dr, sr1, sr2),
+            Op::Trap(Trap::Halt) => self.trap_halt(),
             _ => todo!(),
         }
     }
@@ -36,6 +44,10 @@ impl VM {
     fn add_reg(&mut self, dr: Reg, sr1: Reg, sr2: Reg) {
         let result = self.registers[&sr1] + self.registers[&sr2];
         self.registers.insert(dr, result);
+    }
+
+    fn trap_halt(&mut self) {
+        self.halt = true;
     }
 }
 
@@ -53,8 +65,9 @@ impl Default for VM {
                 (Reg::R6, 0),
                 (Reg::R7, 0),
                 (Reg::Rcnd, 0),
-                (Reg::Rpc, 0),
+                (Reg::Rpc, PC_START),
             ]),
+            halt: false,
         }
     }
 }
@@ -102,13 +115,17 @@ enum Op {
     Jmp,
     Unused,
     Lea,
-    Trap,
+    Trap(Trap),
 }
 
 #[derive(Debug, PartialEq)]
 enum Add {
     AddConst(u16),
     AddReg(Reg),
+}
+#[derive(Debug, PartialEq)]
+enum Trap {
+    Halt,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
@@ -149,7 +166,7 @@ impl Reg {
 }
 
 fn get_nth_bit(value: u16, n: usize) -> bool {
-    ((value >> n) & 1) == 0
+    ((value >> n) & 1) == 1
 }
 
 impl From<u16> for Reg {
@@ -201,7 +218,7 @@ impl From<u16> for Op {
             0b1100 => Op::Jmp,
             0b1101 => Op::Unused,
             0b1110 => Op::Lea,
-            0b1111 => Op::Trap,
+            0b1111 => Op::Trap(Trap::Halt),
             _ => panic!("Op code {instruction} as no matching opcode"),
         }
     }
@@ -213,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_op_from() {
-        assert_eq!(Into::<Op>::into(0b1111111111111111), Op::Trap);
+        assert_eq!(Into::<Op>::into(0b1111111111111111), Op::Trap(Trap::Halt));
         assert_eq!(Into::<Op>::into(0b1001100110010010), Op::Not);
         assert_eq!(Into::<Op>::into(0b0100001010011100), Op::Jsr);
         assert_eq!(Into::<Op>::into(0b0000010110001110), Op::Br);
@@ -249,5 +266,21 @@ mod tests {
         });
 
         assert_eq!(vm.registers[&Reg::R0], 0b1111111111111111); // -1
+    }
+
+    #[test]
+    fn test_run() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R2, 0b1111111111111111);
+
+        let mut program = [0; u16::MAX as usize + 1];
+        program[PC_START as usize] = 0b0001000001000010; // add r1 and r2
+        program[PC_START as usize + 1] = 0b1111000000100101; // halt
+        vm.load(program);
+
+        vm.run();
+
+        assert_eq!(vm.registers[&Reg::R0], 0b1111111111111111);
+
     }
 }
