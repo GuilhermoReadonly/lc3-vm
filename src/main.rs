@@ -5,7 +5,7 @@ fn main() {
 
     let mut vm = VM::default();
 
-    let addr_start = toy_vm::PC_START as usize;
+    let addr_start = toy_vm::PC_START;
 
     let mut prgrm = [0; u16::MAX as usize + 1];
     prgrm[addr_start] = 0b0001000001000010; // add r1 and r2

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-pub const PC_START: u16 = 0x3000;
+pub const PC_START: usize = 0x3000;
 
 pub struct VM {
     memory: Memory,
@@ -36,6 +36,11 @@ impl VM {
                 sr1,
                 variant: Add::AddReg(sr2),
             } => self.add_reg(dr, sr1, sr2),
+            Op::Add {
+                dr,
+                sr1,
+                variant: Add::AddConst(value),
+            } => self.add_const(dr, sr1, value),
             Op::Trap(Trap::Halt) => self.trap_halt(),
             _ => todo!(),
         }
@@ -43,6 +48,11 @@ impl VM {
 
     fn add_reg(&mut self, dr: Reg, sr1: Reg, sr2: Reg) {
         let result = self.registers[&sr1] + self.registers[&sr2];
+        self.registers.insert(dr, result);
+    }
+
+    fn add_const(&mut self, dr: Reg, sr1: Reg, value: u16) {
+        let result = self.registers[&sr1] + value;
         self.registers.insert(dr, result);
     }
 
@@ -65,7 +75,7 @@ impl Default for VM {
                 (Reg::R6, 0),
                 (Reg::R7, 0),
                 (Reg::Rcnd, 0),
-                (Reg::Rpc, PC_START),
+                (Reg::Rpc, PC_START as u16),
             ]),
             halt: false,
         }
@@ -271,16 +281,17 @@ mod tests {
     #[test]
     fn test_run() {
         let mut vm = VM::default();
-        vm.registers.insert(Reg::R2, 0b1111111111111111);
 
         let mut program = [0; u16::MAX as usize + 1];
-        program[PC_START as usize] = 0b0001000001000010; // add r1 and r2
-        program[PC_START as usize + 1] = 0b1111000000100101; // halt
+        program[PC_START + 0] = 0b0001001001100011; // add r1 and 3 in r1
+        program[PC_START + 1] = 0b0001010010100100; // add r2 and 4 in r2
+        program[PC_START + 2] = 0b0001000001000010; // add r1 and r2 in r0
+        program[PC_START + 3] = 0b1111000000100101; // halt
         vm.load(program);
 
         vm.run();
 
-        assert_eq!(vm.registers[&Reg::R0], 0b1111111111111111);
+        assert_eq!(vm.registers[&Reg::R0], 7);
 
     }
 }
