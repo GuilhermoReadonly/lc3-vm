@@ -16,8 +16,10 @@ impl VM {
         while !self.halt {
             let current_addr = self.registers[&Reg::Rpc];
             let next_addr = self.registers[&Reg::Rpc] + 1;
-            self.registers.insert(Reg::Rpc, next_addr) ;
+            self.registers.insert(Reg::Rpc, next_addr);
             let instruction = self.memory.read(current_addr);
+
+            println!("State: {:#?}", self.registers);
 
             print!("Instruction: {instruction:016b}.");
 
@@ -33,14 +35,24 @@ impl VM {
         match op {
             Op::Add {
                 dr,
-                sr1,
-                variant: Add::AddReg(sr2),
+                sr: sr1,
+                variant: RegOrConst::Reg(sr2),
             } => self.add_reg(dr, sr1, sr2),
             Op::Add {
                 dr,
-                sr1,
-                variant: Add::AddConst(value),
+                sr: sr1,
+                variant: RegOrConst::Const(value),
             } => self.add_const(dr, sr1, value),
+            Op::And {
+                dr,
+                sr: sr1,
+                variant: RegOrConst::Reg(sr2),
+            } => self.and_reg(dr, sr1, sr2),
+            Op::And {
+                dr,
+                sr: sr1,
+                variant: RegOrConst::Const(value),
+            } => self.and_const(dr, sr1, value),
             Op::Trap(Trap::Halt) => self.trap_halt(),
             _ => todo!(),
         }
@@ -53,6 +65,16 @@ impl VM {
 
     fn add_const(&mut self, dr: Reg, sr1: Reg, value: u16) {
         let result = self.registers[&sr1] + value;
+        self.registers.insert(dr, result);
+    }
+
+    fn and_reg(&mut self, dr: Reg, sr1: Reg, sr2: Reg) {
+        let result = self.registers[&sr1] & self.registers[&sr2];
+        self.registers.insert(dr, result);
+    }
+
+    fn and_const(&mut self, dr: Reg, sr1: Reg, value: u16) {
+        let result = self.registers[&sr1] & value;
         self.registers.insert(dr, result);
     }
 
@@ -111,11 +133,11 @@ impl Default for Memory {
 #[derive(Debug, PartialEq)]
 enum Op {
     Br,
-    Add { dr: Reg, sr1: Reg, variant: Add },
+    Add { dr: Reg, sr: Reg, variant: RegOrConst },
     Ld,
     St,
     Jsr,
-    And,
+    And { dr: Reg, sr: Reg, variant: RegOrConst },
     Ldr,
     Str,
     Rti,
@@ -129,9 +151,9 @@ enum Op {
 }
 
 #[derive(Debug, PartialEq)]
-enum Add {
-    AddConst(u16),
-    AddReg(Reg),
+enum RegOrConst {
+    Const(u16),
+    Reg(Reg),
 }
 #[derive(Debug, PartialEq)]
 enum Trap {
@@ -204,21 +226,35 @@ impl From<u16> for Op {
                 if get_nth_bit(instruction, 5) {
                     Op::Add {
                         dr: Reg::dr(instruction),
-                        sr1: Reg::sr1(instruction),
-                        variant: Add::AddConst(Reg::imm(instruction)),
+                        sr: Reg::sr1(instruction),
+                        variant: RegOrConst::Const(Reg::imm(instruction)),
                     }
                 } else {
                     Op::Add {
                         dr: Reg::dr(instruction),
-                        sr1: Reg::sr1(instruction),
-                        variant: Add::AddReg(Reg::sr2(instruction)),
+                        sr: Reg::sr1(instruction),
+                        variant: RegOrConst::Reg(Reg::sr2(instruction)),
                     }
                 }
             }
             0b0010 => Op::Ld,
             0b0011 => Op::St,
             0b0100 => Op::Jsr,
-            0b0101 => Op::And,
+            0b0101 => {
+                if get_nth_bit(instruction, 5) {
+                    Op::And {
+                        dr: Reg::dr(instruction),
+                        sr: Reg::sr1(instruction),
+                        variant: RegOrConst::Const(Reg::imm(instruction)),
+                    }
+                } else {
+                    Op::And {
+                        dr: Reg::dr(instruction),
+                        sr: Reg::sr1(instruction),
+                        variant: RegOrConst::Reg(Reg::sr2(instruction)),
+                    }
+                }
+            },
             0b0110 => Op::Ldr,
             0b0111 => Op::Str,
             0b1000 => Op::Rti,
@@ -260,8 +296,8 @@ mod tests {
 
         vm.exec(Op::Add {
             dr: Reg::R0,
-            sr1: Reg::R1,
-            variant: Add::AddReg(Reg::R2),
+            sr: Reg::R1,
+            variant: RegOrConst::Reg(Reg::R2),
         });
 
         assert_eq!(vm.registers[&Reg::R0], 0b0000000000000111); // 7
@@ -271,8 +307,8 @@ mod tests {
 
         vm.exec(Op::Add {
             dr: Reg::R0,
-            sr1: Reg::R1,
-            variant: Add::AddReg(Reg::R2),
+            sr: Reg::R1,
+            variant: RegOrConst::Reg(Reg::R2),
         });
 
         assert_eq!(vm.registers[&Reg::R0], 0b1111111111111111); // -1
@@ -283,15 +319,19 @@ mod tests {
         let mut vm = VM::default();
 
         let mut program = [0; u16::MAX as usize + 1];
-        program[PC_START + 0] = 0b0001001001100011; // add r1 and 3 in r1
-        program[PC_START + 1] = 0b0001010010100100; // add r2 and 4 in r2
-        program[PC_START + 2] = 0b0001000001000010; // add r1 and r2 in r0
-        program[PC_START + 3] = 0b1111000000100101; // halt
+        program[PC_START + 0] = 0b0001001001100011; // add r1/0 and 3 in r1/3
+        program[PC_START + 1] = 0b0001010010100100; // add r2/0 and 4 in r2/4
+        program[PC_START + 2] = 0b0001000001000010; // add r1/3 and r2/4 in r0/7
+        program[PC_START + 3] = 0b0101001001100001; // and r1/3 and 1 in r1/1
+        program[PC_START + 4] = 0b0101111000000010; // and r0/7 and r2/4 in r7/4
+        program[PC_START + 5] = 0b1111000000100101; // halt
         vm.load(program);
 
         vm.run();
 
         assert_eq!(vm.registers[&Reg::R0], 7);
-
+        assert_eq!(vm.registers[&Reg::R1], 1);
+        assert_eq!(vm.registers[&Reg::R2], 4);
+        assert_eq!(vm.registers[&Reg::R7], 4);
     }
 }
