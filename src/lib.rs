@@ -35,7 +35,7 @@ impl VM {
         }
     }
 
-    fn inc_rpc(&mut self){
+    fn inc_rpc(&mut self) {
         let next_addr = self.registers[&Reg::Rpc] + 1;
         self.registers.insert(Reg::Rpc, next_addr);
     }
@@ -288,7 +288,6 @@ impl Instruction for Not {
     }
 }
 
-
 #[derive(Debug)]
 struct Jmp {
     base: Reg,
@@ -326,6 +325,23 @@ impl Instruction for Jsr {
         vm.registers.insert(Reg::R7, rpc);
         let new_rpc = vm.registers[&Reg::Rpc] + self.offset;
         vm.registers.insert(Reg::Rpc, new_rpc);
+    }
+}
+
+#[derive(Debug)]
+struct Br {
+    offset: u16,
+    nzp: u16,
+}
+
+impl Instruction for Br {
+    fn execute(&self, vm: &mut VM) {
+        if self.nzp & vm.registers[&Reg::Rcnd] > 0 {
+            let rpc = vm.registers[&Reg::Rpc];
+            vm.registers.insert(Reg::Rpc, rpc.wrapping_add(self.offset));
+        } else {
+            vm.inc_rpc();
+        }
     }
 }
 
@@ -402,6 +418,11 @@ impl Reg {
         Reg::get_nth_bit(instruction, 5)
     }
 
+    /// Extract the bits b11, b10, b9
+    fn fncd(instruction: u16) -> u16 {
+        (instruction >> 9) & 07
+    }
+
     fn get_nth_bit(value: u16, n: usize) -> bool {
         ((value >> n) & 1) == 1
     }
@@ -427,7 +448,11 @@ impl From<u16> for Box<dyn Instruction> {
     fn from(instruction: u16) -> Self {
         let opcode = instruction >> 12;
         match opcode {
-            // 0b0000 => Op::Br,
+            0b0000 => {
+                let offset = Reg::poff9(instruction);
+                let nzp = Reg::fncd(instruction);
+                Box::new(Br { offset, nzp })
+            }
             0b0001 => {
                 if Reg::fimm(instruction) {
                     Box::new(AddConst {
@@ -517,7 +542,7 @@ impl From<u16> for Box<dyn Instruction> {
                 Box::new(Lea { dr, offset })
             }
             0b1111 => Box::new(TrapHalt {}),
-            _ => panic!("Op code {instruction:016b} as no matching opcode")
+            _ => panic!("Op code {instruction:016b} as no matching opcode"),
         }
     }
 }
@@ -583,7 +608,9 @@ mod tests {
         program[PC_START + 13] = 0b1100000101000000; // jmp r5/43690
         program[43690] = 0b0100100000000111; // jsr offset 7
         program[43697] = 0b0100000100000000; // jsrr r4/718
-        program[718] = 0b1111000000100101; // halt
+        program[718] = 0b0000011111111111; // br false
+        program[719] = 0b0000100000000100; // br true offset 4
+        program[723] = 0b1111000000100101; // halt
 
         // DATA
         program[PC_START + 5 + 256] = 0b0101010101010101; // DATA1/21845
