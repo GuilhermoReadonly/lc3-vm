@@ -91,6 +91,29 @@ impl Default for VM<StdinLock<'_>, Stdout> {
     }
 }
 
+impl Default for VM<&[u8], Vec<u8>> {
+    fn default() -> Self {
+        Self {
+            memory: Memory::default(),
+            registers: HashMap::from([
+                (Reg::R0, 0),
+                (Reg::R1, 0),
+                (Reg::R2, 0),
+                (Reg::R3, 0),
+                (Reg::R4, 0),
+                (Reg::R5, 0),
+                (Reg::R6, 0),
+                (Reg::R7, 0),
+                (Reg::Rcnd, 0),
+                (Reg::Rpc, PC_START as u16),
+            ]),
+            halt: false,
+            reader: b"",
+            writer: Vec::default(),
+        }
+    }
+}
+
 struct Memory {
     mem: [u16; u16::MAX as usize + 1],
 }
@@ -674,7 +697,7 @@ mod tests {
         vm.registers.insert(Reg::R1, 0b0000000000000100); // 4
         vm.registers.insert(Reg::R2, 0b0000000000000011); // 3
 
-        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b0001000001000010.into();
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0001000001000010.into();
         op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::R0], 0b0000000000000111); // 7
     }
@@ -684,7 +707,7 @@ mod tests {
         let mut vm = VM::default();
         vm.registers.insert(Reg::R3, 0b1111111111110111); // -9
 
-        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b0001000011100111.into();
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>>= 0b0001000011100111.into();
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1111111111111110); // -2
@@ -696,7 +719,7 @@ mod tests {
         vm.registers.insert(Reg::R4, 0b1010101010101010);
         vm.registers.insert(Reg::R5, 0b0101010101010101);
 
-        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b0101000001000010.into();
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0101000001000010.into();
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0);
@@ -707,7 +730,7 @@ mod tests {
         let mut vm = VM::default();
         vm.registers.insert(Reg::R6, 0b1010101010101010);
 
-        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b0101000110110101.into();
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0101000110110101.into();
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1010101010100000);
@@ -716,8 +739,10 @@ mod tests {
     #[test]
     fn test_exec_trap_getc() {
         let mut vm = VM::default();
+        let input = vec![0x41, 0x0A];
+        vm.reader = input.as_slice();
 
-        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b1111000000100000.into();
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1111000000100000.into();
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
@@ -725,7 +750,7 @@ mod tests {
 
     #[test]
     fn test_run() {
-        let mut vm = VM::default();
+        let mut vm = VM::<&[u8], Vec<u8>>::default();
 
         let mut program = [0; u16::MAX as usize + 1];
         program[PC_START + 0] = 0b0001001001100011; // add r1/0 and 3 in r1/3
