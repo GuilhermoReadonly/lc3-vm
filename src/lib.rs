@@ -200,6 +200,21 @@ impl Instruction for St {
 }
 
 #[derive(Debug)]
+struct Sti {
+    sr: Reg,
+    offset: u16,
+}
+
+impl Instruction for Sti {
+    fn execute(&self, vm: &mut VM) {
+        let address1 = vm.registers[&Reg::Rpc] + self.offset;
+        let address2 = vm.memory.read(address1);
+        let value = vm.registers[&self.sr];
+        vm.memory.write(address2, value);
+    }
+}
+
+#[derive(Debug)]
 struct TrapHalt {}
 
 impl Instruction for TrapHalt {
@@ -339,7 +354,11 @@ impl From<u16> for Box<dyn Instruction> {
                 let offset = Reg::poff9(instruction);
                 Box::new(Ldi { dr, offset })
             }
-            // 0b1011 => Op::Sti,
+            0b1011 => {
+                let sr = Reg::dr(instruction);
+                let offset = Reg::poff9(instruction);
+                Box::new(Sti { sr, offset })
+            }
             // 0b1100 => Op::Jmp,
             // 0b1101 => Op::Unused,
             // 0b1110 => Op::Lea,
@@ -402,11 +421,13 @@ mod tests {
         program[PC_START + 5] = 0b0010101100000000; // ld offset 256 DATA1/21845 in r5/21845
         program[PC_START + 6] = 0b1010100100000000; // ldi offset 256 DATA2/0 Data3/718 in r4/718
         program[PC_START + 7] = 0b0011010100000000; // st offset 256 r2/4 in DATA4/4
-        program[PC_START + 8] = 0b1111000000100101; // halt
+        program[PC_START + 8] = 0b1011100100000000; // sti offset 256 in r4/718 DATA5/1 Data6/718
+        program[PC_START + 9] = 0b1111000000100101; // halt
 
         // DATA
         program[PC_START + 5 + 256] = 0b0101010101010101; // DATA1/21845
         program[PC_START + 6 + 256] = 0b0000000000000000; // DATA2/0
+        program[PC_START + 8 + 256] = 0b0000000000000001; // DATA5/1
         program[0] = 718; // DATA3/718
         vm.load(program);
 
@@ -419,5 +440,6 @@ mod tests {
         assert_eq!(vm.registers[&Reg::R5], 21845);
         assert_eq!(vm.registers[&Reg::R4], 718);
         assert_eq!(vm.memory.mem[PC_START + 7 + 256], 4);
+        assert_eq!(vm.memory.mem[1], 718);
     }
 }
