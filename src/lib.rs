@@ -170,6 +170,22 @@ impl Instruction for Ld {
 }
 
 #[derive(Debug)]
+struct Ldi {
+    dr: Reg,
+    offset: u16,
+}
+
+impl Instruction for Ldi {
+    fn execute(&self, vm: &mut VM) {
+        let address1 = vm.registers[&Reg::Rpc] + self.offset;
+        let address2 = vm.memory.read(address1);
+        let result = vm.memory.read(address2);
+        vm.registers.insert(self.dr, result);
+        vm.uf(&self.dr);
+    }
+}
+
+#[derive(Debug)]
 struct TrapHalt {}
 
 impl Instruction for TrapHalt {
@@ -300,7 +316,11 @@ impl From<u16> for Box<dyn Instruction> {
             // 0b0111 => Op::Str,
             // 0b1000 => Op::Rti,
             // 0b1001 => Op::Not,
-            // 0b1010 => Op::Ldi,
+            0b1010 => {
+                let dr = Reg::dr(instruction);
+                let offset = Reg::poff9(instruction);
+                Box::new(Ldi { dr, offset })
+            }
             // 0b1011 => Op::Sti,
             // 0b1100 => Op::Jmp,
             // 0b1101 => Op::Unused,
@@ -362,8 +382,13 @@ mod tests {
         program[PC_START + 3] = 0b0101001001100001; // and r1/3 and 1 in r1/1
         program[PC_START + 4] = 0b0101111000000010; // and r0/7 and r2/4 in r7/4
         program[PC_START + 5] = 0b0010101100000000; // ld offset 256 DATA1/21845 in r5/21845
-        program[PC_START + 6] = 0b1111000000100101; // halt
+        program[PC_START + 6] = 0b1010100100000000; // ldi offset 256 DATA2/0 Data3/718 in r4/718
+        program[PC_START + 7] = 0b1111000000100101; // halt
+
+        // DATA
         program[PC_START + 5 + 256] = 0b0101010101010101; // DATA1/21845
+        program[PC_START + 6 + 256] = 0b0000000000000000; // DATA2/0
+        program[0] = 718; // DATA3/718
         vm.load(program);
 
         vm.run();
@@ -373,5 +398,6 @@ mod tests {
         assert_eq!(vm.registers[&Reg::R2], 4);
         assert_eq!(vm.registers[&Reg::R7], 4);
         assert_eq!(vm.registers[&Reg::R5], 21845);
+        assert_eq!(vm.registers[&Reg::R4], 718);
     }
 }
