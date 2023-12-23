@@ -452,18 +452,6 @@ where
     }
 }
 
-#[derive(Debug)]
-struct TrapHalt;
-
-impl<R, W> Instruction<R, W> for TrapHalt
-where
-    R: BufRead,
-    W: Write,
-{
-    fn execute(&self, vm: &mut VM<R, W>) {
-        vm.halt = true;
-    }
-}
 
 #[derive(Debug)]
 struct TrapGetC;
@@ -480,6 +468,37 @@ where
         vm.registers.insert(Reg::R0, c);
     }
 }
+
+
+#[derive(Debug)]
+struct TrapOutC;
+
+impl<R, W> Instruction<R, W> for TrapOutC
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
+        let c = vm.registers[&Reg::R0];
+
+        let buf = vec![c as u8];
+        let _ = vm.writer.write_all(buf.as_slice());
+    }
+}
+
+#[derive(Debug)]
+struct TrapHalt;
+
+impl<R, W> Instruction<R, W> for TrapHalt
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
+        vm.halt = true;
+    }
+}
+
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 enum Reg {
@@ -676,7 +695,13 @@ where
                 let trap_vect = instruction & 0b0000000011111111; 
                 match trap_vect{
                     0x20 =>Box::new(TrapGetC),
+                    0x21 =>Box::new(TrapOutC),
+                    // 0x22 =>Box::new(TrapPutC),
+                    // 0x23 =>Box::new(TrapIn),
+                    // 0x24 =>Box::new(TrapPutsp),
                     0x25 =>Box::new(TrapHalt),
+                    // 0x26 =>Box::new(TrapInu16),
+                    // 0x27 =>Box::new(TrapOutu16),
                     _ => panic!("Trap vect {trap_vect:016b} as no matching trap"),
                 }
             },
@@ -746,6 +771,17 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
+    }
+
+    #[test]
+    fn test_exec_trap_outc() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R0, 0x41);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1111000000100001.into();
+        op.execute(&mut vm);
+
+        assert_eq!(vm.writer, vec![0x41]);
     }
 
     #[test]
