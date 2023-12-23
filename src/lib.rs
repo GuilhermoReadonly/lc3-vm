@@ -302,6 +302,34 @@ impl Instruction for Jmp {
 }
 
 #[derive(Debug)]
+struct Jsrr {
+    base: Reg,
+}
+
+impl Instruction for Jsrr {
+    fn execute(&self, vm: &mut VM) {
+        let rpc = vm.registers[&Reg::Rpc];
+        vm.registers.insert(Reg::R7, rpc);
+        let new_rpc = vm.registers[&self.base];
+        vm.registers.insert(Reg::Rpc, new_rpc);
+    }
+}
+
+#[derive(Debug)]
+struct Jsr {
+    offset: u16,
+}
+
+impl Instruction for Jsr {
+    fn execute(&self, vm: &mut VM) {
+        let rpc = vm.registers[&Reg::Rpc];
+        vm.registers.insert(Reg::R7, rpc);
+        let new_rpc = vm.registers[&Reg::Rpc] + self.offset;
+        vm.registers.insert(Reg::Rpc, new_rpc);
+    }
+}
+
+#[derive(Debug)]
 struct TrapHalt {}
 
 impl Instruction for TrapHalt {
@@ -353,6 +381,11 @@ impl Reg {
     /// get offset 9
     fn poff9(n: u16) -> u16 {
         n & 0x1FF
+    }
+
+    /// get offset 11
+    fn poff11(n: u16) -> u16 {
+        n & 0x7FF
     }
     /// get offset 6
     fn poff(n: u16) -> u16 {
@@ -420,7 +453,17 @@ impl From<u16> for Box<dyn Instruction> {
                 let offset = Reg::poff9(instruction);
                 Box::new(St { sr, offset })
             }
-            // 0b0100 => Op::Jsr,
+            0b0100 => {
+                if Reg::get_nth_bit(instruction, 11) {
+                    Box::new(Jsr {
+                        offset: Reg::poff11(instruction),
+                    })
+                } else {
+                    Box::new(Jsrr {
+                        base: Reg::sr1(instruction),
+                    })
+                }
+            }
             0b0101 => {
                 if Reg::fimm(instruction) {
                     Box::new(AndConst {
@@ -538,7 +581,9 @@ mod tests {
         program[PC_START + 11] = 0b1110011100000000; // lea offset 256 in r3/PC_START + 11 + 256
         program[PC_START + 12] = 0b1001101101111111; // not r5/21845 in r5/-21846 = 43690
         program[PC_START + 13] = 0b1100000101000000; // jmp r5/43690
-        program[43690] = 0b1111000000100101; // halt
+        program[43690] = 0b0100100000000111; // jsr offset 7
+        program[43697] = 0b0100000100000000; // jsrr r4/718
+        program[718] = 0b1111000000100101; // halt
 
         // DATA
         program[PC_START + 5 + 256] = 0b0101010101010101; // DATA1/21845
@@ -553,7 +598,7 @@ mod tests {
         assert_eq!(vm.registers[&Reg::R0], 7);
         assert_eq!(vm.registers[&Reg::R1], 1);
         assert_eq!(vm.registers[&Reg::R2], 4);
-        assert_eq!(vm.registers[&Reg::R7], 4);
+        assert_eq!(vm.registers[&Reg::R7], 43697);
         assert_eq!(vm.registers[&Reg::R5], 43690);
         assert_eq!(vm.registers[&Reg::R4], 718);
         assert_eq!(vm.memory.mem[PC_START + 7 + 256], 4);
