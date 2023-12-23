@@ -20,7 +20,7 @@ impl VM {
     pub fn run(&mut self) {
         while !self.halt {
             let current_addr = self.registers[&Reg::Rpc];
-            let next_addr = self.registers[&Reg::Rpc] + 1;
+
             let instruction = self.memory.read(current_addr);
 
             println!("State: {:#?}", self.registers);
@@ -32,10 +32,13 @@ impl VM {
             println!(" Decoded as {op:?}");
 
             op.execute(self);
-            self.registers.insert(Reg::Rpc, next_addr);
         }
     }
 
+    fn inc_rpc(&mut self){
+        let next_addr = self.registers[&Reg::Rpc] + 1;
+        self.registers.insert(Reg::Rpc, next_addr);
+    }
     fn uf(&mut self, r: &Reg) {
         if self.registers[r] == 0 {
             self.registers.insert(Reg::Rcnd, 1 << 1);
@@ -106,6 +109,7 @@ impl Instruction for AddConst {
         let result = vm.registers[&self.sr].wrapping_add(self.value);
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
+        vm.inc_rpc();
     }
 }
 
@@ -121,6 +125,7 @@ impl Instruction for AddReg {
         let result = vm.registers[&self.sr1].wrapping_add(vm.registers[&self.sr2]);
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
+        vm.inc_rpc();
     }
 }
 
@@ -136,6 +141,7 @@ impl Instruction for AndConst {
         let result = vm.registers[&self.sr] & self.value;
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
+        vm.inc_rpc();
     }
 }
 
@@ -151,6 +157,7 @@ impl Instruction for AndReg {
         let result = vm.registers[&self.sr1] & vm.registers[&self.sr2];
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
+        vm.inc_rpc();
     }
 }
 
@@ -166,6 +173,7 @@ impl Instruction for Ld {
         let result = vm.memory.read(address);
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
+        vm.inc_rpc();
     }
 }
 
@@ -182,6 +190,7 @@ impl Instruction for Ldi {
         let result = vm.memory.read(address2);
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
+        vm.inc_rpc();
     }
 }
 
@@ -198,6 +207,7 @@ impl Instruction for Ldr {
         let result = vm.memory.read(address);
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
+        vm.inc_rpc();
     }
 }
 
@@ -212,6 +222,7 @@ impl Instruction for Lea {
         let address = vm.registers[&Reg::Rpc] + self.offset;
         vm.registers.insert(self.dr, address);
         vm.uf(&self.dr);
+        vm.inc_rpc();
     }
 }
 
@@ -226,6 +237,7 @@ impl Instruction for St {
         let address = vm.registers[&Reg::Rpc] + self.offset;
         let value = vm.registers[&self.sr];
         vm.memory.write(address, value);
+        vm.inc_rpc();
     }
 }
 
@@ -241,6 +253,7 @@ impl Instruction for Sti {
         let address2 = vm.memory.read(address1);
         let value = vm.registers[&self.sr];
         vm.memory.write(address2, value);
+        vm.inc_rpc();
     }
 }
 
@@ -256,6 +269,7 @@ impl Instruction for Str {
         let address = vm.registers[&self.base] + self.offset;
         let value = vm.registers[&self.sr];
         vm.memory.write(address, value);
+        vm.inc_rpc();
     }
 }
 
@@ -270,6 +284,7 @@ impl Instruction for Not {
         let result = !vm.registers[&self.sr];
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
+        vm.inc_rpc();
     }
 }
 
