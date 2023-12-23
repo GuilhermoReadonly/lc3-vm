@@ -1,6 +1,11 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 pub const PC_START: usize = 0x3000;
+
+trait Instruction: Debug {
+    fn execute(&self, vm: &mut VM);
+}
 
 pub struct VM {
     memory: Memory,
@@ -17,45 +22,17 @@ impl VM {
             let current_addr = self.registers[&Reg::Rpc];
             let next_addr = self.registers[&Reg::Rpc] + 1;
             let instruction = self.memory.read(current_addr);
-            
-            println!("State: {:#?}", self.registers);
-            
-            print!("Instruction: {instruction:016b}.");
-            
-            let op: Op = instruction.into();
-            
-            println!(" Decoded as op: {op:?}");
-            
-            self.exec(op);
-            self.registers.insert(Reg::Rpc, next_addr);
-        }
-    }
 
-    fn exec(&mut self, op: Op) {
-        match op {
-            Op::Add {
-                dr,
-                sr: sr1,
-                variant: RegOrConst::Reg(sr2),
-            } => self.add_reg(dr, sr1, sr2),
-            Op::Add {
-                dr,
-                sr: sr1,
-                variant: RegOrConst::Const(value),
-            } => self.add_const(dr, sr1, value),
-            Op::And {
-                dr,
-                sr: sr1,
-                variant: RegOrConst::Reg(sr2),
-            } => self.and_reg(dr, sr1, sr2),
-            Op::And {
-                dr,
-                sr: sr1,
-                variant: RegOrConst::Const(value),
-            } => self.and_const(dr, sr1, value),
-            Op::Ld { dr, offset } => self.ld(dr, offset),
-            Op::Trap(Trap::Halt) => self.trap_halt(),
-            _ => todo!(),
+            println!("State: {:#?}", self.registers);
+
+            print!("Instruction: {instruction:016b}.");
+
+            let op: Box<dyn Instruction> = instruction.into();
+
+            println!(" Decoded as {op:?}");
+
+            op.execute(self);
+            self.registers.insert(Reg::Rpc, next_addr);
         }
     }
 
@@ -67,41 +44,6 @@ impl VM {
         } else {
             self.registers.insert(Reg::Rcnd, 1 << 0);
         }
-    }
-
-    fn add_reg(&mut self, dr: Reg, sr1: Reg, sr2: Reg) {
-        let result = self.registers[&sr1].wrapping_add(self.registers[&sr2]);
-        self.registers.insert(dr, result);
-        self.uf(&dr);
-    }
-
-    fn add_const(&mut self, dr: Reg, sr1: Reg, value: u16) {
-        let result = self.registers[&sr1].wrapping_add(value);
-        self.registers.insert(dr, result);
-        self.uf(&dr);
-    }
-
-    fn and_reg(&mut self, dr: Reg, sr1: Reg, sr2: Reg) {
-        let result = self.registers[&sr1] & self.registers[&sr2];
-        self.registers.insert(dr, result);
-        self.uf(&dr);
-    }
-
-    fn and_const(&mut self, dr: Reg, sr1: Reg, value: u16) {
-        let result = self.registers[&sr1] & value;
-        self.registers.insert(dr, result);
-        self.uf(&dr);
-    }
-
-    fn ld(&mut self, dr: Reg, offset: u16) {
-        let address = self.registers[&Reg::Rpc] + offset;
-        let result = self.memory.read(address);
-        self.registers.insert(dr, result);
-        self.uf(&dr);
-    }
-
-    fn trap_halt(&mut self) {
-        self.halt = true;
     }
 }
 
@@ -153,44 +95,87 @@ impl Default for Memory {
 }
 
 #[derive(Debug, PartialEq)]
-enum Op {
-    Br,
-    Add {
-        dr: Reg,
-        sr: Reg,
-        variant: RegOrConst,
-    },
-    Ld {
-        dr: Reg,
-        offset: u16,
-    },
-    St,
-    Jsr,
-    And {
-        dr: Reg,
-        sr: Reg,
-        variant: RegOrConst,
-    },
-    Ldr,
-    Str,
-    Rti,
-    Not,
-    Ldi,
-    Sti,
-    Jmp,
-    Unused,
-    Lea,
-    Trap(Trap),
+struct AddConst {
+    dr: Reg,
+    sr: Reg,
+    value: u16,
+}
+
+impl Instruction for AddConst {
+    fn execute(&self, vm: &mut VM) {
+        let result = vm.registers[&self.sr].wrapping_add(self.value);
+        vm.registers.insert(self.dr, result);
+        vm.uf(&self.dr);
+    }
+}
+
+#[derive(Debug)]
+struct AddReg {
+    dr: Reg,
+    sr1: Reg,
+    sr2: Reg,
+}
+
+impl Instruction for AddReg {
+    fn execute(&self, vm: &mut VM) {
+        let result = vm.registers[&self.sr1].wrapping_add(vm.registers[&self.sr2]);
+        vm.registers.insert(self.dr, result);
+        vm.uf(&self.dr);
+    }
 }
 
 #[derive(Debug, PartialEq)]
-enum RegOrConst {
-    Const(u16),
-    Reg(Reg),
+struct AndConst {
+    dr: Reg,
+    sr: Reg,
+    value: u16,
 }
-#[derive(Debug, PartialEq)]
-enum Trap {
-    Halt,
+
+impl Instruction for AndConst {
+    fn execute(&self, vm: &mut VM) {
+        let result = vm.registers[&self.sr] & self.value;
+        vm.registers.insert(self.dr, result);
+        vm.uf(&self.dr);
+    }
+}
+
+#[derive(Debug)]
+struct AndReg {
+    dr: Reg,
+    sr1: Reg,
+    sr2: Reg,
+}
+
+impl Instruction for AndReg {
+    fn execute(&self, vm: &mut VM) {
+        let result = vm.registers[&self.sr1] & vm.registers[&self.sr2];
+        vm.registers.insert(self.dr, result);
+        vm.uf(&self.dr);
+    }
+}
+
+#[derive(Debug)]
+struct Ld {
+    dr: Reg,
+    offset: u16,
+}
+
+impl Instruction for Ld {
+    fn execute(&self, vm: &mut VM) {
+        let address = vm.registers[&Reg::Rpc] + self.offset;
+        let result = vm.memory.read(address);
+        vm.registers.insert(self.dr, result);
+        vm.uf(&self.dr);
+    }
+}
+
+#[derive(Debug)]
+struct TrapHalt {}
+
+impl Instruction for TrapHalt {
+    fn execute(&self, vm: &mut VM) {
+        vm.halt = true;
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
@@ -269,58 +254,58 @@ impl From<u16> for Reg {
     }
 }
 
-impl From<u16> for Op {
+impl From<u16> for Box<dyn Instruction> {
     fn from(instruction: u16) -> Self {
         let opcode = instruction >> 12;
         match opcode {
-            0b0000 => Op::Br,
+            // 0b0000 => Op::Br,
             0b0001 => {
                 if Reg::fimm(instruction) {
-                    Op::Add {
+                    Box::new(AddConst {
                         dr: Reg::dr(instruction),
                         sr: Reg::sr1(instruction),
-                        variant: RegOrConst::Const(Reg::sextimm(instruction)),
-                    }
+                        value: Reg::sextimm(instruction),
+                    })
                 } else {
-                    Op::Add {
+                    Box::new(AddReg {
                         dr: Reg::dr(instruction),
-                        sr: Reg::sr1(instruction),
-                        variant: RegOrConst::Reg(Reg::sr2(instruction)),
-                    }
+                        sr1: Reg::sr1(instruction),
+                        sr2: Reg::sr2(instruction),
+                    })
                 }
             }
             0b0010 => {
                 let dr = Reg::dr(instruction);
                 let offset = Reg::poff9(instruction);
-                Op::Ld { dr, offset }
+                Box::new(Ld { dr, offset })
             }
-            0b0011 => Op::St,
-            0b0100 => Op::Jsr,
+            // 0b0011 => Op::St,
+            // 0b0100 => Op::Jsr,
             0b0101 => {
                 if Reg::fimm(instruction) {
-                    Op::And {
+                    Box::new(AndConst {
                         dr: Reg::dr(instruction),
                         sr: Reg::sr1(instruction),
-                        variant: RegOrConst::Const(Reg::sextimm(instruction)),
-                    }
+                        value: Reg::sextimm(instruction),
+                    })
                 } else {
-                    Op::And {
+                    Box::new(AndReg {
                         dr: Reg::dr(instruction),
-                        sr: Reg::sr1(instruction),
-                        variant: RegOrConst::Reg(Reg::sr2(instruction)),
-                    }
+                        sr1: Reg::sr1(instruction),
+                        sr2: Reg::sr2(instruction),
+                    })
                 }
             }
-            0b0110 => Op::Ldr,
-            0b0111 => Op::Str,
-            0b1000 => Op::Rti,
-            0b1001 => Op::Not,
-            0b1010 => Op::Ldi,
-            0b1011 => Op::Sti,
-            0b1100 => Op::Jmp,
-            0b1101 => Op::Unused,
-            0b1110 => Op::Lea,
-            0b1111 => Op::Trap(Trap::Halt),
+            // 0b0110 => Op::Ldr,
+            // 0b0111 => Op::Str,
+            // 0b1000 => Op::Rti,
+            // 0b1001 => Op::Not,
+            // 0b1010 => Op::Ldi,
+            // 0b1011 => Op::Sti,
+            // 0b1100 => Op::Jmp,
+            // 0b1101 => Op::Unused,
+            // 0b1110 => Op::Lea,
+            0b1111 => Box::new(TrapHalt {}),
             _ => panic!("Op code {instruction} as no matching opcode"),
         }
     }
@@ -331,42 +316,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_op_from() {
-        assert_eq!(Into::<Op>::into(0b1111111111111111), Op::Trap(Trap::Halt));
-        assert_eq!(Into::<Op>::into(0b1001100110010010), Op::Not);
-        assert_eq!(Into::<Op>::into(0b0100001010011100), Op::Jsr);
-        assert_eq!(Into::<Op>::into(0b0000010110001110), Op::Br);
-    }
-
-    #[test]
-    fn test_exec_add() {
+    fn test_exec_add_reg() {
         let mut vm = VM::default();
 
         vm.registers.insert(Reg::R1, 0b0000000000000100); // 4
         vm.registers.insert(Reg::R2, 0b0000000000000011); // 3
-        vm.exec(Op::Add {
+
+        let op = AddReg {
             dr: Reg::R0,
-            sr: Reg::R1,
-            variant: RegOrConst::Reg(Reg::R2),
-        });
+            sr1: Reg::R1,
+            sr2: Reg::R2,
+        };
+        op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::R0], 0b0000000000000111); // 7
 
         vm.registers.insert(Reg::R3, 0b1111111111111100); // -4
         vm.registers.insert(Reg::R4, 0b0000000000000011); // 3
-        vm.exec(Op::Add {
+        let op = AddReg {
             dr: Reg::R0,
-            sr: Reg::R3,
-            variant: RegOrConst::Reg(Reg::R4),
-        });
+            sr1: Reg::R3,
+            sr2: Reg::R4,
+        };
+        op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::R0], 0b1111111111111111); // -1
 
         vm.registers.insert(Reg::R6, 0b1111111111111111); // -1
         vm.registers.insert(Reg::R7, 0b1111111111111111); // -1
-        vm.exec(Op::Add {
+        let op = AddReg {
             dr: Reg::R0,
-            sr: Reg::R7,
-            variant: RegOrConst::Reg(Reg::R6),
-        });
+            sr1: Reg::R7,
+            sr2: Reg::R6,
+        };
+        op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::R0], 0b1111111111111110); // -2
     }
 
