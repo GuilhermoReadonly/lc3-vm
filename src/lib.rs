@@ -186,6 +186,22 @@ impl Instruction for Ldi {
 }
 
 #[derive(Debug)]
+struct Ldr {
+    dr: Reg,
+    base: Reg,
+    offset: u16,
+}
+
+impl Instruction for Ldr {
+    fn execute(&self, vm: &mut VM) {
+        let address = vm.registers[&self.base] + self.offset;
+        let result = vm.memory.read(address);
+        vm.registers.insert(self.dr, result);
+        vm.uf(&self.dr);
+    }
+}
+
+#[derive(Debug)]
 struct St {
     sr: Reg,
     offset: u16,
@@ -211,6 +227,21 @@ impl Instruction for Sti {
         let address2 = vm.memory.read(address1);
         let value = vm.registers[&self.sr];
         vm.memory.write(address2, value);
+    }
+}
+
+#[derive(Debug)]
+struct Str {
+    sr: Reg,
+    base: Reg,
+    offset: u16,
+}
+
+impl Instruction for Str {
+    fn execute(&self, vm: &mut VM) {
+        let address = vm.registers[&self.base] + self.offset;
+        let value = vm.registers[&self.sr];
+        vm.memory.write(address, value);
     }
 }
 
@@ -266,6 +297,10 @@ impl Reg {
     /// get offset 9
     fn poff9(n: u16) -> u16 {
         n & 0x1FF
+    }
+    /// get offset 6
+    fn poff(n: u16) -> u16 {
+        n & 0x3F
     }
 
     /// Sign extend imm5
@@ -328,7 +363,7 @@ impl From<u16> for Box<dyn Instruction> {
                 let sr = Reg::dr(instruction);
                 let offset = Reg::poff9(instruction);
                 Box::new(St { sr, offset })
-            },
+            }
             // 0b0100 => Op::Jsr,
             0b0101 => {
                 if Reg::fimm(instruction) {
@@ -345,8 +380,18 @@ impl From<u16> for Box<dyn Instruction> {
                     })
                 }
             }
-            // 0b0110 => Op::Ldr,
-            // 0b0111 => Op::Str,
+            0b0110 => {
+                let dr = Reg::dr(instruction);
+                let offset = Reg::poff(instruction);
+                let base = Reg::sr1(instruction);
+                Box::new(Ldr { dr, base, offset })
+            }
+            0b0111 => {
+                let sr = Reg::dr(instruction);
+                let offset = Reg::poff(instruction);
+                let base = Reg::sr1(instruction);
+                Box::new(Str { sr, base, offset })
+            }
             // 0b1000 => Op::Rti,
             // 0b1001 => Op::Not,
             0b1010 => {
@@ -422,13 +467,16 @@ mod tests {
         program[PC_START + 6] = 0b1010100100000000; // ldi offset 256 DATA2/0 Data3/718 in r4/718
         program[PC_START + 7] = 0b0011010100000000; // st offset 256 r2/4 in DATA4/4
         program[PC_START + 8] = 0b1011100100000000; // sti offset 256 in r4/718 DATA5/1 Data6/718
-        program[PC_START + 9] = 0b1111000000100101; // halt
+        program[PC_START + 9] = 0b0110110000000001; // ldr base R0/7 offset 1 DATA8/18 in r6/18
+        program[PC_START + 10] = 0b0111010100000010; // str base R0/7 offset 2 r6/1 in DATA7/18
+        program[PC_START + 11] = 0b1111000000100101; // halt
 
         // DATA
         program[PC_START + 5 + 256] = 0b0101010101010101; // DATA1/21845
         program[PC_START + 6 + 256] = 0b0000000000000000; // DATA2/0
         program[PC_START + 8 + 256] = 0b0000000000000001; // DATA5/1
         program[0] = 718; // DATA3/718
+        program[8] = 18; // DATA3/718
         vm.load(program);
 
         vm.run();
@@ -441,5 +489,7 @@ mod tests {
         assert_eq!(vm.registers[&Reg::R4], 718);
         assert_eq!(vm.memory.mem[PC_START + 7 + 256], 4);
         assert_eq!(vm.memory.mem[1], 718);
+        assert_eq!(vm.registers[&Reg::R6], 18);
+        assert_eq!(vm.memory.mem[8], 18); //Data7/18
     }
 }
