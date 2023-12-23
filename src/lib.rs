@@ -202,6 +202,20 @@ impl Instruction for Ldr {
 }
 
 #[derive(Debug)]
+struct Lea {
+    dr: Reg,
+    offset: u16,
+}
+
+impl Instruction for Lea {
+    fn execute(&self, vm: &mut VM) {
+        let address = vm.registers[&Reg::Rpc] + self.offset;
+        vm.registers.insert(self.dr, address);
+        vm.uf(&self.dr);
+    }
+}
+
+#[derive(Debug)]
 struct St {
     sr: Reg,
     offset: u16,
@@ -406,7 +420,11 @@ impl From<u16> for Box<dyn Instruction> {
             }
             // 0b1100 => Op::Jmp,
             // 0b1101 => Op::Unused,
-            // 0b1110 => Op::Lea,
+            0b1110 => {
+                let dr = Reg::dr(instruction);
+                let offset = Reg::poff9(instruction);
+                Box::new(Lea { dr, offset })
+            }
             0b1111 => Box::new(TrapHalt {}),
             _ => panic!("Op code {instruction} as no matching opcode"),
         }
@@ -469,7 +487,8 @@ mod tests {
         program[PC_START + 8] = 0b1011100100000000; // sti offset 256 in r4/718 DATA5/1 Data6/718
         program[PC_START + 9] = 0b0110110000000001; // ldr base R0/7 offset 1 DATA8/18 in r6/18
         program[PC_START + 10] = 0b0111010100000010; // str base R0/7 offset 2 r6/1 in DATA7/18
-        program[PC_START + 11] = 0b1111000000100101; // halt
+        program[PC_START + 11] = 0b1110011100000000; // lea offset 256 in r3/PC_START + 11 + 256
+        program[PC_START + 12] = 0b1111000000100101; // halt
 
         // DATA
         program[PC_START + 5 + 256] = 0b0101010101010101; // DATA1/21845
@@ -490,6 +509,7 @@ mod tests {
         assert_eq!(vm.memory.mem[PC_START + 7 + 256], 4);
         assert_eq!(vm.memory.mem[1], 718);
         assert_eq!(vm.registers[&Reg::R6], 18);
+        assert_eq!(vm.registers[&Reg::R3], PC_START as u16 + 11 + 256);
         assert_eq!(vm.memory.mem[8], 18); //Data7/18
     }
 }
