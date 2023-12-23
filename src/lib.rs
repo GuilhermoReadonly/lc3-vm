@@ -288,6 +288,19 @@ impl Instruction for Not {
     }
 }
 
+
+#[derive(Debug)]
+struct Jmp {
+    base: Reg,
+}
+
+impl Instruction for Jmp {
+    fn execute(&self, vm: &mut VM) {
+        let new_rpc = vm.registers[&self.base];
+        vm.registers.insert(Reg::Rpc, new_rpc);
+    }
+}
+
 #[derive(Debug)]
 struct TrapHalt {}
 
@@ -450,7 +463,10 @@ impl From<u16> for Box<dyn Instruction> {
                 let offset = Reg::poff9(instruction);
                 Box::new(Sti { sr, offset })
             }
-            // 0b1100 => Op::Jmp,
+            0b1100 => {
+                let base = Reg::sr1(instruction);
+                Box::new(Jmp { base })
+            }
             // 0b1101 => Op::Unused,
             0b1110 => {
                 let dr = Reg::dr(instruction);
@@ -458,7 +474,7 @@ impl From<u16> for Box<dyn Instruction> {
                 Box::new(Lea { dr, offset })
             }
             0b1111 => Box::new(TrapHalt {}),
-            _ => panic!("Op code {instruction:016b} as no matching opcode"),
+            _ => panic!("Op code {instruction:016b} as no matching opcode")
         }
     }
 }
@@ -520,8 +536,9 @@ mod tests {
         program[PC_START + 9] = 0b0110110000000001; // ldr base R0/7 offset 1 DATA8/18 in r6/18
         program[PC_START + 10] = 0b0111010100000010; // str base R0/7 offset 2 r6/1 in DATA7/18
         program[PC_START + 11] = 0b1110011100000000; // lea offset 256 in r3/PC_START + 11 + 256
-        program[PC_START + 12] = 0b1001101101111111; // not r5/21845 in r5/-21846
-        program[PC_START + 13] = 0b1111000000100101; // halt
+        program[PC_START + 12] = 0b1001101101111111; // not r5/21845 in r5/-21846 = 43690
+        program[PC_START + 13] = 0b1100000101000000; // jmp r5/43690
+        program[43690] = 0b1111000000100101; // halt
 
         // DATA
         program[PC_START + 5 + 256] = 0b0101010101010101; // DATA1/21845
@@ -537,7 +554,7 @@ mod tests {
         assert_eq!(vm.registers[&Reg::R1], 1);
         assert_eq!(vm.registers[&Reg::R2], 4);
         assert_eq!(vm.registers[&Reg::R7], 4);
-        assert_eq!(vm.registers[&Reg::R5], 0b1010101010101010);
+        assert_eq!(vm.registers[&Reg::R5], 43690);
         assert_eq!(vm.registers[&Reg::R4], 718);
         assert_eq!(vm.memory.mem[PC_START + 7 + 256], 4);
         assert_eq!(vm.memory.mem[1], 718);
