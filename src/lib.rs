@@ -16,18 +16,18 @@ impl VM {
         while !self.halt {
             let current_addr = self.registers[&Reg::Rpc];
             let next_addr = self.registers[&Reg::Rpc] + 1;
-            self.registers.insert(Reg::Rpc, next_addr);
             let instruction = self.memory.read(current_addr);
-
+            
             println!("State: {:#?}", self.registers);
-
+            
             print!("Instruction: {instruction:016b}.");
-
+            
             let op: Op = instruction.into();
-
+            
             println!(" Decoded as op: {op:?}");
-
+            
             self.exec(op);
+            self.registers.insert(Reg::Rpc, next_addr);
         }
     }
 
@@ -53,29 +53,51 @@ impl VM {
                 sr: sr1,
                 variant: RegOrConst::Const(value),
             } => self.and_const(dr, sr1, value),
+            Op::Ld { dr, offset } => self.ld(dr, offset),
             Op::Trap(Trap::Halt) => self.trap_halt(),
             _ => todo!(),
+        }
+    }
+
+    fn uf(&mut self, r: &Reg) {
+        if self.registers[r] == 0 {
+            self.registers.insert(Reg::Rcnd, 1 << 1);
+        } else if self.registers[r] >> 15 == 1 {
+            self.registers.insert(Reg::Rcnd, 1 << 2);
+        } else {
+            self.registers.insert(Reg::Rcnd, 1 << 0);
         }
     }
 
     fn add_reg(&mut self, dr: Reg, sr1: Reg, sr2: Reg) {
         let result = self.registers[&sr1].wrapping_add(self.registers[&sr2]);
         self.registers.insert(dr, result);
+        self.uf(&dr);
     }
 
     fn add_const(&mut self, dr: Reg, sr1: Reg, value: u16) {
         let result = self.registers[&sr1].wrapping_add(value);
         self.registers.insert(dr, result);
+        self.uf(&dr);
     }
 
     fn and_reg(&mut self, dr: Reg, sr1: Reg, sr2: Reg) {
         let result = self.registers[&sr1] & self.registers[&sr2];
         self.registers.insert(dr, result);
+        self.uf(&dr);
     }
 
     fn and_const(&mut self, dr: Reg, sr1: Reg, value: u16) {
         let result = self.registers[&sr1] & value;
         self.registers.insert(dr, result);
+        self.uf(&dr);
+    }
+
+    fn ld(&mut self, dr: Reg, offset: u16) {
+        let address = self.registers[&Reg::Rpc] + offset;
+        let result = self.memory.read(address);
+        self.registers.insert(dr, result);
+        self.uf(&dr);
     }
 
     fn trap_halt(&mut self) {
@@ -138,7 +160,10 @@ enum Op {
         sr: Reg,
         variant: RegOrConst,
     },
-    Ld,
+    Ld {
+        dr: Reg,
+        offset: u16,
+    },
     St,
     Jsr,
     And {
@@ -196,17 +221,36 @@ impl Reg {
         reg_nb.into()
     }
     fn imm(instruction: u16) -> u16 {
-        let imm = instruction & 0b0000000000011111;
-        if (imm >> (5 - 1)) & 1 == 1 {
-            imm | (0xFFFF << 5)
+        instruction & 0b0000000000011111
+    }
+
+    /// if the bth bit of n is 1, fill up n with 1s the remaining bits else return n
+    fn sext(n: u16, b: usize) -> u16 {
+        if (n >> (b - 1)) & 1 == 1 {
+            n | (0xFFFF << b)
         } else {
-            imm
+            n
         }
     }
-}
 
-fn get_nth_bit(value: u16, n: usize) -> bool {
-    ((value >> n) & 1) == 1
+    /// get offset 9
+    fn poff9(n: u16) -> u16 {
+        n & 0x1FF
+    }
+
+    /// Sign extend imm5
+    fn sextimm(n: u16) -> u16 {
+        Reg::sext(Reg::imm(n), 5)
+    }
+
+    /// Get the 5th bit as boolean
+    fn fimm(instruction: u16) -> bool {
+        Reg::get_nth_bit(instruction, 5)
+    }
+
+    fn get_nth_bit(value: u16, n: usize) -> bool {
+        ((value >> n) & 1) == 1
+    }
 }
 
 impl From<u16> for Reg {
@@ -231,11 +275,11 @@ impl From<u16> for Op {
         match opcode {
             0b0000 => Op::Br,
             0b0001 => {
-                if get_nth_bit(instruction, 5) {
+                if Reg::fimm(instruction) {
                     Op::Add {
                         dr: Reg::dr(instruction),
                         sr: Reg::sr1(instruction),
-                        variant: RegOrConst::Const(Reg::imm(instruction)),
+                        variant: RegOrConst::Const(Reg::sextimm(instruction)),
                     }
                 } else {
                     Op::Add {
@@ -245,15 +289,19 @@ impl From<u16> for Op {
                     }
                 }
             }
-            0b0010 => Op::Ld,
+            0b0010 => {
+                let dr = Reg::dr(instruction);
+                let offset = Reg::poff9(instruction);
+                Op::Ld { dr, offset }
+            }
             0b0011 => Op::St,
             0b0100 => Op::Jsr,
             0b0101 => {
-                if get_nth_bit(instruction, 5) {
+                if Reg::fimm(instruction) {
                     Op::And {
                         dr: Reg::dr(instruction),
                         sr: Reg::sr1(instruction),
-                        variant: RegOrConst::Const(Reg::imm(instruction)),
+                        variant: RegOrConst::Const(Reg::sextimm(instruction)),
                     }
                 } else {
                     Op::And {
@@ -288,11 +336,6 @@ mod tests {
         assert_eq!(Into::<Op>::into(0b1001100110010010), Op::Not);
         assert_eq!(Into::<Op>::into(0b0100001010011100), Op::Jsr);
         assert_eq!(Into::<Op>::into(0b0000010110001110), Op::Br);
-    }
-
-    #[test]
-    fn test_imm() {
-        assert_eq!(Reg::imm(0b1010101010110001), 0b1111111111110001);
     }
 
     #[test]
@@ -337,7 +380,9 @@ mod tests {
         program[PC_START + 2] = 0b0001000001000010; // add r1/3 and r2/4 in r0/7
         program[PC_START + 3] = 0b0101001001100001; // and r1/3 and 1 in r1/1
         program[PC_START + 4] = 0b0101111000000010; // and r0/7 and r2/4 in r7/4
-        program[PC_START + 5] = 0b1111000000100101; // halt
+        program[PC_START + 5] = 0b0010101100000000; // ld offset 256 DATA1/21845 in r5/21845
+        program[PC_START + 6] = 0b1111000000100101; // halt
+        program[PC_START + 5 + 256] = 0b0101010101010101; // DATA1/21845
         vm.load(program);
 
         vm.run();
@@ -346,5 +391,6 @@ mod tests {
         assert_eq!(vm.registers[&Reg::R1], 1);
         assert_eq!(vm.registers[&Reg::R2], 4);
         assert_eq!(vm.registers[&Reg::R7], 4);
+        assert_eq!(vm.registers[&Reg::R5], 21845);
     }
 }
