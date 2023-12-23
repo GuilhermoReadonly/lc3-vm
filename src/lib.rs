@@ -1,19 +1,34 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::io::{self, BufRead, StdinLock, Stdout, Write};
 
 pub const PC_START: usize = 0x3000;
 
-trait Instruction: Debug {
-    fn execute(&self, vm: &mut VM);
+trait Instruction<R, W>: Debug
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>);
 }
 
-pub struct VM {
+pub struct VM<R, W>
+where
+    R: BufRead,
+    W: Write,
+{
     memory: Memory,
     registers: HashMap<Reg, u16>,
     halt: bool,
+    reader: R,
+    writer: W,
 }
 
-impl VM {
+impl<R, W> VM<R, W>
+where
+    R: BufRead,
+    W: Write,
+{
     pub fn load(&mut self, program: [u16; u16::MAX as usize + 1]) {
         self.memory.load(program)
     }
@@ -27,7 +42,7 @@ impl VM {
 
             print!("Instruction: {instruction:016b}.");
 
-            let op: Box<dyn Instruction> = instruction.into();
+            let op: Box<dyn Instruction<R, W>> = instruction.into();
 
             println!(" Decoded as {op:?}");
 
@@ -50,8 +65,11 @@ impl VM {
     }
 }
 
-impl Default for VM {
+impl Default for VM<StdinLock<'_>, Stdout> {
     fn default() -> Self {
+        let stdio = io::stdin();
+        let input = stdio.lock();
+        let output = io::stdout();
         Self {
             memory: Memory::default(),
             registers: HashMap::from([
@@ -67,6 +85,8 @@ impl Default for VM {
                 (Reg::Rpc, PC_START as u16),
             ]),
             halt: false,
+            reader: input,
+            writer: output,
         }
     }
 }
@@ -104,8 +124,12 @@ struct AddConst {
     value: u16,
 }
 
-impl Instruction for AddConst {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for AddConst
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let result = vm.registers[&self.sr].wrapping_add(self.value);
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
@@ -120,8 +144,12 @@ struct AddReg {
     sr2: Reg,
 }
 
-impl Instruction for AddReg {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for AddReg
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let result = vm.registers[&self.sr1].wrapping_add(vm.registers[&self.sr2]);
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
@@ -136,8 +164,12 @@ struct AndConst {
     value: u16,
 }
 
-impl Instruction for AndConst {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for AndConst
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let result = vm.registers[&self.sr] & self.value;
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
@@ -152,8 +184,12 @@ struct AndReg {
     sr2: Reg,
 }
 
-impl Instruction for AndReg {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for AndReg
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let result = vm.registers[&self.sr1] & vm.registers[&self.sr2];
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
@@ -167,8 +203,12 @@ struct Ld {
     offset: u16,
 }
 
-impl Instruction for Ld {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Ld
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let address = vm.registers[&Reg::Rpc] + self.offset;
         let result = vm.memory.read(address);
         vm.registers.insert(self.dr, result);
@@ -183,8 +223,12 @@ struct Ldi {
     offset: u16,
 }
 
-impl Instruction for Ldi {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Ldi
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let address1 = vm.registers[&Reg::Rpc] + self.offset;
         let address2 = vm.memory.read(address1);
         let result = vm.memory.read(address2);
@@ -201,8 +245,12 @@ struct Ldr {
     offset: u16,
 }
 
-impl Instruction for Ldr {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Ldr
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let address = vm.registers[&self.base] + self.offset;
         let result = vm.memory.read(address);
         vm.registers.insert(self.dr, result);
@@ -217,8 +265,12 @@ struct Lea {
     offset: u16,
 }
 
-impl Instruction for Lea {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Lea
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let address = vm.registers[&Reg::Rpc] + self.offset;
         vm.registers.insert(self.dr, address);
         vm.uf(&self.dr);
@@ -232,8 +284,12 @@ struct St {
     offset: u16,
 }
 
-impl Instruction for St {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for St
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let address = vm.registers[&Reg::Rpc] + self.offset;
         let value = vm.registers[&self.sr];
         vm.memory.write(address, value);
@@ -247,8 +303,12 @@ struct Sti {
     offset: u16,
 }
 
-impl Instruction for Sti {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Sti
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let address1 = vm.registers[&Reg::Rpc] + self.offset;
         let address2 = vm.memory.read(address1);
         let value = vm.registers[&self.sr];
@@ -264,8 +324,12 @@ struct Str {
     offset: u16,
 }
 
-impl Instruction for Str {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Str
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let address = vm.registers[&self.base] + self.offset;
         let value = vm.registers[&self.sr];
         vm.memory.write(address, value);
@@ -279,8 +343,12 @@ struct Not {
     sr: Reg,
 }
 
-impl Instruction for Not {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Not
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let result = !vm.registers[&self.sr];
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
@@ -293,8 +361,12 @@ struct Jmp {
     base: Reg,
 }
 
-impl Instruction for Jmp {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Jmp
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let new_rpc = vm.registers[&self.base];
         vm.registers.insert(Reg::Rpc, new_rpc);
     }
@@ -305,8 +377,12 @@ struct Jsrr {
     base: Reg,
 }
 
-impl Instruction for Jsrr {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Jsrr
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.registers[&Reg::Rpc];
         vm.registers.insert(Reg::R7, rpc);
         let new_rpc = vm.registers[&self.base];
@@ -319,8 +395,12 @@ struct Jsr {
     offset: u16,
 }
 
-impl Instruction for Jsr {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Jsr
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.registers[&Reg::Rpc];
         vm.registers.insert(Reg::R7, rpc);
         let new_rpc = vm.registers[&Reg::Rpc] + self.offset;
@@ -334,8 +414,12 @@ struct Br {
     nzp: u16,
 }
 
-impl Instruction for Br {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for Br
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         if self.nzp & vm.registers[&Reg::Rcnd] > 0 {
             let rpc = vm.registers[&Reg::Rpc];
             vm.registers.insert(Reg::Rpc, rpc.wrapping_add(self.offset));
@@ -346,11 +430,31 @@ impl Instruction for Br {
 }
 
 #[derive(Debug)]
-struct TrapHalt {}
+struct TrapHalt;
 
-impl Instruction for TrapHalt {
-    fn execute(&self, vm: &mut VM) {
+impl<R, W> Instruction<R, W> for TrapHalt
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
         vm.halt = true;
+    }
+}
+
+#[derive(Debug)]
+struct TrapGetC;
+
+impl<R, W> Instruction<R, W> for TrapGetC
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
+        let mut buf = [0; 1];
+        let _ = vm.reader.read(&mut buf);
+        let c = buf[0] as u16;
+        vm.registers.insert(Reg::R0, c);
     }
 }
 
@@ -444,7 +548,11 @@ impl From<u16> for Reg {
     }
 }
 
-impl From<u16> for Box<dyn Instruction> {
+impl<R, W> From<u16> for Box<dyn Instruction<R, W>>
+where
+    R: BufRead,
+    W: Write,
+{
     fn from(instruction: u16) -> Self {
         let opcode = instruction >> 12;
         match opcode {
@@ -541,7 +649,14 @@ impl From<u16> for Box<dyn Instruction> {
                 let offset = Reg::poff9(instruction);
                 Box::new(Lea { dr, offset })
             }
-            0b1111 => Box::new(TrapHalt {}),
+            0b1111 => {
+                let trap_vect = instruction & 0b0000000011111111; 
+                match trap_vect{
+                    0x20 =>Box::new(TrapGetC),
+                    0x25 =>Box::new(TrapHalt),
+                    _ => panic!("Trap vect {trap_vect:016b} as no matching trap"),
+                }
+            },
             _ => panic!("Op code {instruction:016b} as no matching opcode"),
         }
     }
@@ -549,6 +664,7 @@ impl From<u16> for Box<dyn Instruction> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -558,33 +674,53 @@ mod tests {
         vm.registers.insert(Reg::R1, 0b0000000000000100); // 4
         vm.registers.insert(Reg::R2, 0b0000000000000011); // 3
 
-        let op = AddReg {
-            dr: Reg::R0,
-            sr1: Reg::R1,
-            sr2: Reg::R2,
-        };
+        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b0001000001000010.into();
         op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::R0], 0b0000000000000111); // 7
+    }
 
-        vm.registers.insert(Reg::R3, 0b1111111111111100); // -4
-        vm.registers.insert(Reg::R4, 0b0000000000000011); // 3
-        let op = AddReg {
-            dr: Reg::R0,
-            sr1: Reg::R3,
-            sr2: Reg::R4,
-        };
-        op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::R0], 0b1111111111111111); // -1
+    #[test]
+    fn test_exec_add_const() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R3, 0b1111111111110111); // -9
 
-        vm.registers.insert(Reg::R6, 0b1111111111111111); // -1
-        vm.registers.insert(Reg::R7, 0b1111111111111111); // -1
-        let op = AddReg {
-            dr: Reg::R0,
-            sr1: Reg::R7,
-            sr2: Reg::R6,
-        };
+        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b0001000011100111.into();
         op.execute(&mut vm);
+
         assert_eq!(vm.registers[&Reg::R0], 0b1111111111111110); // -2
+    }
+
+    #[test]
+    fn test_exec_and_reg() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R4, 0b1010101010101010);
+        vm.registers.insert(Reg::R5, 0b0101010101010101);
+
+        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b0101000001000010.into();
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::R0], 0);
+    }
+
+    #[test]
+    fn test_exec_and_const() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R6, 0b1010101010101010);
+
+        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b0101000110110101.into();
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::R0], 0b1010101010100000);
+    }
+
+    #[test]
+    fn test_exec_trap_getc() {
+        let mut vm = VM::default();
+
+        let op: Box<dyn Instruction<StdinLock, Stdout>> = 0b1111000000100000.into();
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
     }
 
     #[test]
