@@ -77,7 +77,7 @@ impl Memory {
         self.mem[address as usize]
     }
 
-    fn _write(&mut self, address: u16, val: u16) -> () {
+    fn write(&mut self, address: u16, val: u16) -> () {
         self.mem[address as usize] = val;
     }
 
@@ -182,6 +182,20 @@ impl Instruction for Ldi {
         let result = vm.memory.read(address2);
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
+    }
+}
+
+#[derive(Debug)]
+struct St {
+    sr: Reg,
+    offset: u16,
+}
+
+impl Instruction for St {
+    fn execute(&self, vm: &mut VM) {
+        let address = vm.registers[&Reg::Rpc] + self.offset;
+        let value = vm.registers[&self.sr];
+        vm.memory.write(address, value);
     }
 }
 
@@ -295,7 +309,11 @@ impl From<u16> for Box<dyn Instruction> {
                 let offset = Reg::poff9(instruction);
                 Box::new(Ld { dr, offset })
             }
-            // 0b0011 => Op::St,
+            0b0011 => {
+                let sr = Reg::dr(instruction);
+                let offset = Reg::poff9(instruction);
+                Box::new(St { sr, offset })
+            },
             // 0b0100 => Op::Jsr,
             0b0101 => {
                 if Reg::fimm(instruction) {
@@ -383,7 +401,8 @@ mod tests {
         program[PC_START + 4] = 0b0101111000000010; // and r0/7 and r2/4 in r7/4
         program[PC_START + 5] = 0b0010101100000000; // ld offset 256 DATA1/21845 in r5/21845
         program[PC_START + 6] = 0b1010100100000000; // ldi offset 256 DATA2/0 Data3/718 in r4/718
-        program[PC_START + 7] = 0b1111000000100101; // halt
+        program[PC_START + 7] = 0b0011010100000000; // st offset 256 r2/4 in DATA4/4
+        program[PC_START + 8] = 0b1111000000100101; // halt
 
         // DATA
         program[PC_START + 5 + 256] = 0b0101010101010101; // DATA1/21845
@@ -399,5 +418,6 @@ mod tests {
         assert_eq!(vm.registers[&Reg::R7], 4);
         assert_eq!(vm.registers[&Reg::R5], 21845);
         assert_eq!(vm.registers[&Reg::R4], 718);
+        assert_eq!(vm.memory.mem[PC_START + 7 + 256], 4);
     }
 }
