@@ -480,9 +480,7 @@ where
 {
     fn execute(&self, vm: &mut VM<R, W>) {
         let c = vm.registers[&Reg::R0];
-
-        let buf = vec![c as u8];
-        let _ = vm.writer.write_all(buf.as_slice());
+        let _ = vm.writer.write_all(&[c as u8][..]);
     }
 }
 
@@ -505,6 +503,23 @@ where
             i += 1;
             c = vm.memory.read(address + i);
         }
+    }
+}
+
+#[derive(Debug)]
+struct TrapIn;
+
+impl<R, W> Instruction<R, W> for TrapIn
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
+        let mut buf = [0; 1];
+        let _ = vm.reader.read(&mut buf);
+        let c = buf[0] as u16;
+        vm.registers.insert(Reg::R0, c);
+        let _ = vm.writer.write_all(&buf[..]);
     }
 }
 
@@ -719,7 +734,7 @@ where
                     0x20 =>Box::new(TrapGetC),
                     0x21 =>Box::new(TrapOutC),
                     0x22 =>Box::new(TrapPuts),
-                    // 0x23 =>Box::new(TrapIn),
+                    0x23 =>Box::new(TrapIn),
                     // 0x24 =>Box::new(TrapPutsp),
                     0x25 =>Box::new(TrapHalt),
                     // 0x26 =>Box::new(TrapInu16),
@@ -786,8 +801,7 @@ mod tests {
     #[test]
     fn test_exec_trap_getc() {
         let mut vm = VM::default();
-        let input = vec![0x41, 0x0A];
-        vm.reader = input.as_slice();
+        vm.reader = &[0x41, 0x0A][..];
 
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1111000000100000.into();
         op.execute(&mut vm);
@@ -819,6 +833,18 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41, 0x42, 0x43]);
+    }
+
+    #[test]
+    fn test_exec_trap_in() {
+        let mut vm = VM::default();
+        vm.reader = &[0x41, 0x0A][..];
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1111000000100011.into();
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
+        assert_eq!(vm.writer, vec![0x41]);
     }
 
     #[test]
