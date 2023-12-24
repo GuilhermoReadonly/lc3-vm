@@ -1,9 +1,11 @@
+use std::io::{Stdout, StdinLock};
+
 use toy_vm::VM;
 
 fn main() {
     println!("Starting VM...");
 
-    let mut vm = VM::default();
+    let mut vm: VM<StdinLock, Stdout> = VM::default();
 
     let addr_start = toy_vm::PC_START;
 
