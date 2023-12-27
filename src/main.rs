@@ -27,14 +27,14 @@ fn main() {
     // retour a la ligne en memoire 7
     prgrm[7] = b'\n' as u16;
     // initialiser r0 a la valeur 0
-    prgrm[addr_start + 7] = 0b0001000000100000;
+    prgrm[addr_start + 7] = 0b0101000000100000;
     // ajouter 7 a r0
     prgrm[addr_start + 8] = 0b0001000000100111;
     // afficher le retour a la ligne
     prgrm[addr_start + 9] = 0b1111000000100010;
 
     // halt
-    prgrm[addr_start + 8] = 0b1111000000100101; // halt
+    prgrm[addr_start + 10] = 0b1111000000100101; // halt
 
     vm.load(prgrm);
 
