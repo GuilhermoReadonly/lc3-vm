@@ -452,7 +452,6 @@ where
     }
 }
 
-
 #[derive(Debug)]
 struct TrapGetC;
 
@@ -468,7 +467,6 @@ where
         vm.registers.insert(Reg::R0, c);
     }
 }
-
 
 #[derive(Debug)]
 struct TrapOutC;
@@ -494,10 +492,10 @@ where
 {
     fn execute(&self, vm: &mut VM<R, W>) {
         let address = vm.registers[&Reg::R0];
-        
+
         let mut c = vm.memory.read(address);
         let mut i = 0;
-        while c != 0{
+        while c != 0 {
             let buf = vec![c as u8];
             let _ = vm.writer.write_all(buf.as_slice());
             i += 1;
@@ -515,7 +513,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let mut buf = [0; 1];
+        let mut buf: [u8; 1] = [0; 1];
         let _ = vm.reader.read(&mut buf);
         let c = buf[0] as u16;
         vm.registers.insert(Reg::R0, c);
@@ -536,6 +534,30 @@ where
     }
 }
 
+#[derive(Debug)]
+struct TrapInu16;
+
+impl<R, W> Instruction<R, W> for TrapInu16
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
+        let mut buf: [u8; 1] = [0; 1];
+        let mut all_characters = String::from("");
+        let mut character: u8 = 0;
+        while character != 0x0A {
+            let _ = vm.reader.read(&mut buf);
+            character = buf[0];
+            if character.is_ascii_digit() {
+                all_characters.push(character as char);
+            }
+        }
+
+        let number: u16 = u16::from_str_radix(&all_characters, 10).expect("u16 conversion failed");
+        vm.registers.insert(Reg::R0, number);
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 enum Reg {
@@ -729,19 +751,19 @@ where
                 Box::new(Lea { dr, offset })
             }
             0b1111 => {
-                let trap_vect = instruction & 0b0000000011111111; 
-                match trap_vect{
-                    0x20 =>Box::new(TrapGetC),
-                    0x21 =>Box::new(TrapOutC),
-                    0x22 =>Box::new(TrapPuts),
-                    0x23 =>Box::new(TrapIn),
+                let trap_vect = instruction & 0b0000000011111111;
+                match trap_vect {
+                    0x20 => Box::new(TrapGetC),
+                    0x21 => Box::new(TrapOutC),
+                    0x22 => Box::new(TrapPuts),
+                    0x23 => Box::new(TrapIn),
                     // 0x24 =>Box::new(TrapPutsp),
-                    0x25 =>Box::new(TrapHalt),
-                    // 0x26 =>Box::new(TrapInu16),
+                    0x25 => Box::new(TrapHalt),
+                    0x26 => Box::new(TrapInu16),
                     // 0x27 =>Box::new(TrapOutu16),
                     _ => panic!("Trap vect {trap_vect:016b} as no matching trap"),
                 }
-            },
+            }
             _ => panic!("Op code {instruction:016b} as no matching opcode"),
         }
     }
@@ -769,7 +791,7 @@ mod tests {
         let mut vm = VM::default();
         vm.registers.insert(Reg::R3, 0b1111111111110111); // -9
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>>= 0b0001000011100111.into();
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0001000011100111.into();
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1111111111111110); // -2
@@ -847,6 +869,17 @@ mod tests {
         assert_eq!(vm.writer, vec![0x41]);
     }
 
+    #[test]
+    fn test_exec_trap_in_u16() {
+        let mut vm = VM::default();
+        vm.reader = &[0x32, 0x35, 0x35, 0x0A][..]; // 255 Enter
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1111000000100110.into();
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::R0], 255); // R0 contains 255
+    }
+
     // TODO
     // #[test]
     // fn test_exec_trap_putsp() {
@@ -867,7 +900,6 @@ mod tests {
 
         assert_eq!(vm.halt, true);
     }
-
 
     #[test]
     fn test_run() {
