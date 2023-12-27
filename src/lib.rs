@@ -465,6 +465,7 @@ where
         let _ = vm.reader.read(&mut buf);
         let c = buf[0] as u16;
         vm.registers.insert(Reg::R0, c);
+        vm.inc_rpc();
     }
 }
 
@@ -479,6 +480,7 @@ where
     fn execute(&self, vm: &mut VM<R, W>) {
         let c = vm.registers[&Reg::R0];
         let _ = vm.writer.write_all(&[c as u8][..]);
+        vm.inc_rpc();
     }
 }
 
@@ -501,6 +503,7 @@ where
             i += 1;
             c = vm.memory.read(address + i);
         }
+        vm.inc_rpc();
     }
 }
 
@@ -526,6 +529,7 @@ where
             i += 1;
             c = vm.memory.read(address + i);
         }
+        vm.inc_rpc();
     }
 }
 
@@ -543,6 +547,7 @@ where
         let c = buf[0] as u16;
         vm.registers.insert(Reg::R0, c);
         let _ = vm.writer.write_all(&buf[..]);
+        vm.inc_rpc();
     }
 }
 
@@ -582,6 +587,7 @@ where
 
         let number: u16 = u16::from_str_radix(&all_characters, 10).expect("u16 conversion failed");
         vm.registers.insert(Reg::R0, number);
+        vm.inc_rpc();
     }
 }
 
@@ -599,6 +605,7 @@ where
         for character in c_string.as_bytes() {
             let _ = vm.writer.write_all(&[*character][..]);
         }
+        vm.inc_rpc();
     }
 }
 
@@ -827,6 +834,7 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0001000001000010.into();
         op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::R0], 0b0000000000000111); // 7
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -838,6 +846,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1111111111111110); // -2
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -850,6 +859,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -861,6 +871,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1010101010100000);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -872,6 +883,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -883,6 +895,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41]);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -898,6 +911,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41, 0x42, 0x43]);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -910,6 +924,7 @@ mod tests {
 
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
         assert_eq!(vm.writer, vec![0x41]);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -921,6 +936,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 255); // R0 contains 255
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -932,6 +948,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![b'2', b'5', b'5']);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
@@ -947,6 +964,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41, 0x42, 0x43, 0x44]);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
