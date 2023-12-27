@@ -547,6 +547,7 @@ where
         let mut all_characters = String::from("");
         let mut character: u8 = 0;
         while character != 0x0A {
+            // 0x0A: Enter
             let _ = vm.reader.read(&mut buf);
             character = buf[0];
             if character.is_ascii_digit() {
@@ -556,6 +557,23 @@ where
 
         let number: u16 = u16::from_str_radix(&all_characters, 10).expect("u16 conversion failed");
         vm.registers.insert(Reg::R0, number);
+    }
+}
+
+#[derive(Debug)]
+struct TrapOutu16;
+
+impl<R, W> Instruction<R, W> for TrapOutu16
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
+        let c = vm.registers[&Reg::R0];
+        let c_string = c.to_string();
+        for character in c_string.as_bytes() {
+            let _ = vm.writer.write_all(&[*character][..]);
+        }
     }
 }
 
@@ -760,7 +778,7 @@ where
                     // 0x24 =>Box::new(TrapPutsp),
                     0x25 => Box::new(TrapHalt),
                     0x26 => Box::new(TrapInu16),
-                    // 0x27 =>Box::new(TrapOutu16),
+                    0x27 => Box::new(TrapOutu16),
                     _ => panic!("Trap vect {trap_vect:016b} as no matching trap"),
                 }
             }
@@ -878,6 +896,17 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 255); // R0 contains 255
+    }
+
+    #[test]
+    fn test_exec_trap_out_u16() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R0, 255);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1111000000100111.into();
+        op.execute(&mut vm);
+
+        assert_eq!(vm.writer, vec![b'2', b'5', b'5']);
     }
 
     // TODO
