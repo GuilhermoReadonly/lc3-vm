@@ -847,6 +847,28 @@ mod tests {
         assert_eq!(vm.writer, vec![0x41]);
     }
 
+    // TODO
+    // #[test]
+    // fn test_exec_trap_putsp() {
+    //     let mut vm = VM::default();
+
+    //     let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1111000000100100.into();
+    //     op.execute(&mut vm);
+
+    //     assert_eq!(vm.halt, true);
+    // }
+
+    #[test]
+    fn test_exec_trap_halt() {
+        let mut vm = VM::default();
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1111000000100101.into();
+        op.execute(&mut vm);
+
+        assert_eq!(vm.halt, true);
+    }
+
+
     #[test]
     fn test_run() {
         let mut vm = VM::<&[u8], Vec<u8>>::default();
