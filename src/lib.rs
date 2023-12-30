@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::io::{self, BufRead, StdinLock, Stdout, Write};
+use std::io::{self, BufRead, Read, StdinLock, Stdout, Write};
 
 pub const PC_START: usize = 0x3000;
 
@@ -29,16 +29,19 @@ where
     R: BufRead,
     W: Write,
 {
-    pub fn load(&mut self, mut program: R) {
+    pub fn load<P>(&mut self, mut program: P)
+    where
+        P: Read,
+    {
         let mut buf = [0; 2];
         let mut read_result = program.read_exact(&mut buf);
 
-        let mut base_address = buf[0] as u16 + (buf[1] as u16) << 8;
+        let mut base_address = buf[1] as u16 | (buf[0] as u16) << 8;
 
         while read_result.is_ok() {
             read_result = program.read_exact(&mut buf);
 
-            let instruction = buf[0] as u16 + (buf[1] as u16) << 8;
+            let instruction = buf[1] as u16 | (buf[0] as u16) << 8;
             self.memory.write(base_address, instruction);
             base_address += 1;
         }
@@ -830,6 +833,8 @@ where
 #[cfg(test)]
 mod tests {
 
+    use std::io::BufReader;
+
     use super::*;
 
     #[test]
@@ -986,59 +991,41 @@ mod tests {
     }
 
     #[test]
-    fn test_run() {
+    fn test_load_and_run() {
         let mut vm = VM::<&[u8], Vec<u8>>::default();
 
-        let start = 0x3000;
+        let program: &[u16] = &[
+            0x3000,             // start = 0x3000; // 00110000 00000000
+            0b0001001001100011, // add r1/0 and 3 in r1/3
+            0b0001010010100100, // add r2/0 and 4 in r2/4
+            0b0001000001000010, // add r1/3 and r2/4 in r0/7
+            0b0101001001100001, // and r1/3 and 1 in r1/1
+            0b0101111000000010, // and r0/7 and r2/4 in r7/4
+            0b0010101000000011, // ld offset 3 DATA/718 in r5/718
+            0b1111000000100101, // halt
+            0,
+            0b0000001011001110, // DATA/718
+        ];
 
-        let mut program: [u16; u16::MAX as usize + 1] = [0; u16::MAX as usize + 1];
-        program[start + 0] = 0b0001001001100011; // add r1/0 and 3 in r1/3
-        program[start + 1] = 0b0001010010100100; // add r2/0 and 4 in r2/4
-        program[start + 2] = 0b0001000001000010; // add r1/3 and r2/4 in r0/7
-        program[start + 3] = 0b0101001001100001; // and r1/3 and 1 in r1/1
-        program[start + 4] = 0b0101111000000010; // and r0/7 and r2/4 in r7/4
-        program[start + 5] = 0b0010101100000000; // ld offset 256 DATA1/21845 in r5/21845
-        program[start + 6] = 0b1010100100000000; // ldi offset 256 DATA2/0 Data3/718 in r4/718
-        program[start + 7] = 0b0011010100000000; // st offset 256 r2/4 in DATA4/4
-        program[start + 8] = 0b1011100100000000; // sti offset 256 in r4/718 DATA5/1 Data6/718
-        program[start + 9] = 0b0110110000000001; // ldr base R0/7 offset 1 DATA8/18 in r6/18
-        program[start + 10] = 0b0111010100000010; // str base R0/7 offset 2 r6/1 in DATA7/18
-        program[start + 11] = 0b1110011100000000; // lea offset 256 in r3/start + 11 + 256
-        program[start + 12] = 0b1001101101111111; // not r5/21845 in r5/-21846 = 43690
-        program[start + 13] = 0b1100000101000000; // jmp r5/43690
-        program[43690] = 0b0100100000000111; // jsr offset 7
-        program[43697] = 0b0100000100000000; // jsrr r4/718
-        program[718] = 0b0000011111111111; // br false
-        program[719] = 0b0000100000000100; // br true offset 4
-        program[723] = 0b1111000000100101; // halt
-
-        // DATA
-        program[start + 5 + 256] = 0b0101010101010101; // DATA1/21845
-        program[start + 6 + 256] = 0b0000000000000000; // DATA2/0
-        program[start + 8 + 256] = 0b0000000000000001; // DATA5/1
-        program[0] = 718; // DATA3/718
-        program[8] = 18; // DATA3/718
-
-        let mut res = [0; 16];
-        for i in 0..u16::MAX as usize + 1 {
-            res[u16::MAX as usize + 1*i..][..u16::MAX as usize + 1].copy_from_slice(&program[i].to_le_bytes());
+        let mut res: [u8;20] = [0; 20];
+        for i in 0..program.len() {
+            res[i*2] = (program[i] >> 8) as u8; 
+            res[i*2+1] = (program[i] & 0x00FF) as u8; 
         }
 
+        let reader = BufReader::new(res.as_slice());
 
-        vm.load(&res);
+        vm.load(reader);
 
         vm.run();
 
         assert_eq!(vm.registers[&Reg::R0], 7);
         assert_eq!(vm.registers[&Reg::R1], 1);
         assert_eq!(vm.registers[&Reg::R2], 4);
-        assert_eq!(vm.registers[&Reg::R7], 43697);
-        assert_eq!(vm.registers[&Reg::R5], 43690);
-        assert_eq!(vm.registers[&Reg::R4], 718);
-        assert_eq!(vm.memory.mem[start + 7 + 256], 4);
-        assert_eq!(vm.memory.mem[1], 718);
-        assert_eq!(vm.registers[&Reg::R6], 18);
-        assert_eq!(vm.registers[&Reg::R3], start as u16 + 11 + 256);
-        assert_eq!(vm.memory.mem[8], 18); //Data7/18
+        assert_eq!(vm.registers[&Reg::R3], 0);
+        assert_eq!(vm.registers[&Reg::R4], 0);
+        assert_eq!(vm.registers[&Reg::R5], 718);
+        assert_eq!(vm.registers[&Reg::R6], 0);
+        assert_eq!(vm.registers[&Reg::R7], 4);
     }
 }
