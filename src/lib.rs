@@ -37,6 +37,7 @@ where
         let mut read_result = program.read_exact(&mut buf);
 
         let mut base_address = buf[1] as u16 | (buf[0] as u16) << 8;
+        self.registers.insert(Reg::Rpc, base_address);
 
         while read_result.is_ok() {
             read_result = program.read_exact(&mut buf);
@@ -48,6 +49,8 @@ where
     }
 
     pub fn run(&mut self) {
+        let mut i_count: u128 = 0;
+
         while !self.halt {
             let current_addr = self.registers[&Reg::Rpc];
 
@@ -55,13 +58,14 @@ where
 
             println!("State: {:#?}", self.registers);
 
-            print!("Instruction: {instruction:016b}.");
+            print!("Instruction ({i_count}): {instruction:016b}.");
 
             let op: Box<dyn Instruction<R, W>> = instruction.into();
 
             println!(" Decoded as {op:?}");
 
             op.execute(self);
+            i_count += 1;
         }
     }
 
@@ -1007,10 +1011,10 @@ mod tests {
             0b0000001011001110, // DATA/718
         ];
 
-        let mut res: [u8;20] = [0; 20];
+        let mut res: [u8; 20] = [0; 20];
         for i in 0..program.len() {
-            res[i*2] = (program[i] >> 8) as u8; 
-            res[i*2+1] = (program[i] & 0x00FF) as u8; 
+            res[i * 2] = (program[i] >> 8) as u8;
+            res[i * 2 + 1] = (program[i] & 0x00FF) as u8;
         }
 
         let reader = BufReader::new(res.as_slice());
