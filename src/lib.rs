@@ -66,7 +66,12 @@ where
 
             op.execute(self);
             i_count += 1;
+
+            if i_count % 100_000_000 == 0{
+                println!("{i_count} instructions executed.");
+            }
         }
+        println!("{i_count} instructions executed.");
     }
 
     fn inc_rpc(&mut self) {
@@ -155,7 +160,7 @@ impl Default for Memory {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 struct AddConst {
     dr: Reg,
     sr: Reg,
@@ -172,6 +177,16 @@ where
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
         vm.inc_rpc();
+    }
+}
+
+impl From<u16> for AddConst{
+    fn from(instruction: u16) -> Self {
+        AddConst {
+            dr: Reg::dr(instruction),
+            sr: Reg::sr1(instruction),
+            value: Reg::sextimm(instruction),
+        }
     }
 }
 
@@ -195,7 +210,17 @@ where
     }
 }
 
-#[derive(Debug, PartialEq)]
+impl From<u16> for AddReg{
+    fn from(instruction: u16) -> Self {
+        AddReg {
+            dr: Reg::dr(instruction),
+            sr1: Reg::sr1(instruction),
+            sr2: Reg::sr2(instruction),
+        }
+    }
+}
+
+#[derive(Debug)]
 struct AndConst {
     dr: Reg,
     sr: Reg,
@@ -212,6 +237,16 @@ where
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
         vm.inc_rpc();
+    }
+}
+
+impl From<u16> for AndConst{
+    fn from(instruction: u16) -> Self {
+        AndConst {
+            dr: Reg::dr(instruction),
+            sr: Reg::sr1(instruction),
+            value: Reg::sextimm(instruction),
+        }
     }
 }
 
@@ -232,6 +267,16 @@ where
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
         vm.inc_rpc();
+    }
+}
+
+impl From<u16> for AndReg{
+    fn from(instruction: u16) -> Self {
+        AndReg {
+            dr: Reg::dr(instruction),
+            sr1: Reg::sr1(instruction),
+            sr2: Reg::sr2(instruction),
+        }
     }
 }
 
@@ -313,6 +358,14 @@ where
         vm.registers.insert(self.dr, address);
         vm.uf(&self.dr);
         vm.inc_rpc();
+    }
+}
+
+impl From<u16> for Lea{
+    fn from(instruction: u16) -> Self {
+        let dr = Reg::dr(instruction);
+        let offset = Reg::poff9(instruction);
+        Lea { dr, offset }
     }
 }
 
@@ -729,17 +782,9 @@ where
             }
             0b0001 => {
                 if Reg::fimm(instruction) {
-                    Box::new(AddConst {
-                        dr: Reg::dr(instruction),
-                        sr: Reg::sr1(instruction),
-                        value: Reg::sextimm(instruction),
-                    })
+                    Box::new(AddConst::from(instruction))
                 } else {
-                    Box::new(AddReg {
-                        dr: Reg::dr(instruction),
-                        sr1: Reg::sr1(instruction),
-                        sr2: Reg::sr2(instruction),
-                    })
+                    Box::new(AddReg::from(instruction))
                 }
             }
             0b0010 => {
@@ -765,17 +810,9 @@ where
             }
             0b0101 => {
                 if Reg::fimm(instruction) {
-                    Box::new(AndConst {
-                        dr: Reg::dr(instruction),
-                        sr: Reg::sr1(instruction),
-                        value: Reg::sextimm(instruction),
-                    })
+                    Box::new(AndConst::from(instruction))
                 } else {
-                    Box::new(AndReg {
-                        dr: Reg::dr(instruction),
-                        sr1: Reg::sr1(instruction),
-                        sr2: Reg::sr2(instruction),
-                    })
+                    Box::new(AndReg::from(instruction))
                 }
             }
             0b0110 => {
@@ -811,9 +848,7 @@ where
             }
             // 0b1101 => Op::Unused,
             0b1110 => {
-                let dr = Reg::dr(instruction);
-                let offset = Reg::poff9(instruction);
-                Box::new(Lea { dr, offset })
+                Box::new(Lea::from(instruction))
             }
             0b1111 => {
                 let trap_vect = instruction & 0b0000000011111111;
