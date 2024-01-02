@@ -978,6 +978,17 @@ mod tests {
     }
 
     #[test]
+    fn test_exec_lea() {
+        let mut vm = VM::default();
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1110011111111111.into(); // Lea Dr=R3 offset=511
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::R3], 0x31FF);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+    }
+
+    #[test]
     fn test_exec_trap_getc() {
         let mut vm = VM::default();
         vm.reader = &[0x41, 0x0A][..];
