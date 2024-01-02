@@ -472,6 +472,15 @@ where
     }
 }
 
+impl From<u16> for Str {
+    fn from(instruction: u16) -> Self {
+        let sr = Reg::dr(instruction);
+        let base = Reg::sr1(instruction);
+        let offset = Reg::poff(instruction);
+        Str { sr, base, offset }
+    }
+}
+
 #[derive(Debug)]
 struct Not {
     dr: Reg,
@@ -860,12 +869,7 @@ where
                 }
             }
             0b0110 => Box::new(Ldr::from(instruction)),
-            0b0111 => {
-                let sr = Reg::dr(instruction);
-                let offset = Reg::poff(instruction);
-                let base = Reg::sr1(instruction);
-                Box::new(Str { sr, base, offset })
-            }
+            0b0111 => Box::new(Str::from(instruction)),
             // 0b1000 => Op::Rti,
             0b1001 => Box::new(Not::from(instruction)),
             0b1010 => Box::new(Ldi::from(instruction)),
@@ -1031,10 +1035,23 @@ mod tests {
         vm.registers.insert(Reg::R3, 718);
         vm.memory.write(0x31FF, 0xFFFF);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1011011111111111.into(); // St Sr=R3 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1011011111111111.into(); // Sti Sr=R3 offset=511
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0xFFFF), 718);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+    }
+
+    #[test]
+    fn test_exec_str() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R4, 718);
+        vm.registers.insert(Reg::R5, 0xFF00);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0111100101111111.into(); // Str Sr=R4 BaseR=R5 offset=63
+        op.execute(&mut vm);
+
+        assert_eq!(vm.memory.read(0xFF3F), 718);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
