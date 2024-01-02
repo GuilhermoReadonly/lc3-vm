@@ -67,7 +67,7 @@ where
             op.execute(self);
             i_count += 1;
 
-            if i_count % 100_000_000 == 0{
+            if i_count % 100_000_000 == 0 {
                 println!("{i_count} instructions executed.");
             }
         }
@@ -180,7 +180,7 @@ where
     }
 }
 
-impl From<u16> for AddConst{
+impl From<u16> for AddConst {
     fn from(instruction: u16) -> Self {
         AddConst {
             dr: Reg::dr(instruction),
@@ -210,7 +210,7 @@ where
     }
 }
 
-impl From<u16> for AddReg{
+impl From<u16> for AddReg {
     fn from(instruction: u16) -> Self {
         AddReg {
             dr: Reg::dr(instruction),
@@ -240,7 +240,7 @@ where
     }
 }
 
-impl From<u16> for AndConst{
+impl From<u16> for AndConst {
     fn from(instruction: u16) -> Self {
         AndConst {
             dr: Reg::dr(instruction),
@@ -270,7 +270,7 @@ where
     }
 }
 
-impl From<u16> for AndReg{
+impl From<u16> for AndReg {
     fn from(instruction: u16) -> Self {
         AndReg {
             dr: Reg::dr(instruction),
@@ -297,6 +297,15 @@ where
         vm.registers.insert(self.dr, result);
         vm.uf(&self.dr);
         vm.inc_rpc();
+    }
+}
+
+impl From<u16> for Ld {
+    fn from(instruction: u16) -> Self {
+        Ld {
+            dr: Reg::dr(instruction),
+            offset: Reg::poff9(instruction),
+        }
     }
 }
 
@@ -361,7 +370,7 @@ where
     }
 }
 
-impl From<u16> for Lea{
+impl From<u16> for Lea {
     fn from(instruction: u16) -> Self {
         let dr = Reg::dr(instruction);
         let offset = Reg::poff9(instruction);
@@ -787,11 +796,7 @@ where
                     Box::new(AddReg::from(instruction))
                 }
             }
-            0b0010 => {
-                let dr = Reg::dr(instruction);
-                let offset = Reg::poff9(instruction);
-                Box::new(Ld { dr, offset })
-            }
+            0b0010 => Box::new(Ld::from(instruction)),
             0b0011 => {
                 let sr = Reg::dr(instruction);
                 let offset = Reg::poff9(instruction);
@@ -847,9 +852,7 @@ where
                 Box::new(Jmp { base })
             }
             // 0b1101 => Op::Unused,
-            0b1110 => {
-                Box::new(Lea::from(instruction))
-            }
+            0b1110 => Box::new(Lea::from(instruction)),
             0b1111 => {
                 let trap_vect = instruction & 0b0000000011111111;
                 match trap_vect {
@@ -923,6 +926,18 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1010101010100000);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+    }
+
+    #[test]
+    fn test_exec_ld() {
+        let mut vm = VM::default();
+        vm.memory.write(0x31FF, 718);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0010110111111111.into(); // Ld Dr=R6 offset=511
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::R6], 0b0000001011001110);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
