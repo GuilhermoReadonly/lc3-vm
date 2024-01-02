@@ -567,10 +567,17 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.registers[&Reg::Rpc];
+        let rpc = vm.registers[&Reg::Rpc].wrapping_add(1);
         vm.registers.insert(Reg::R7, rpc);
-        let new_rpc = vm.registers[&Reg::Rpc] + self.offset;
+        let new_rpc = rpc + self.offset;
         vm.registers.insert(Reg::Rpc, new_rpc);
+    }
+}
+
+impl From<u16> for Jsr {
+    fn from(instruction: u16) -> Self {
+        let offset = Reg::poff11(instruction);
+        Jsr { offset }
     }
 }
 
@@ -866,9 +873,7 @@ where
             0b0011 => Box::new(St::from(instruction)),
             0b0100 => {
                 if Reg::get_nth_bit(instruction, 11) {
-                    Box::new(Jsr {
-                        offset: Reg::poff11(instruction),
-                    })
+                    Box::new(Jsr::from(instruction))
                 } else {
                     Box::new(Jsrr::from(instruction))
                 }
@@ -1084,6 +1089,17 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::Rpc], 0xFF00);
+        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+    }
+
+    #[test]
+    fn test_exec_jsr() {
+        let mut vm = VM::default();
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0100_1_11111111111.into(); // Jsr offset=2047
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 + 0b11111111111);
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
     }
 
