@@ -594,11 +594,19 @@ where
 {
     fn execute(&self, vm: &mut VM<R, W>) {
         if self.nzp & vm.registers[&Reg::Rcnd] > 0 {
-            let rpc = vm.registers[&Reg::Rpc];
+            let rpc = vm.registers[&Reg::Rpc].wrapping_add(1);
             vm.registers.insert(Reg::Rpc, rpc.wrapping_add(self.offset));
         } else {
             vm.inc_rpc();
         }
+    }
+}
+
+impl From<u16> for Br {
+    fn from(instruction: u16) -> Self {
+        let offset = Reg::poff9(instruction);
+        let nzp = Reg::fncd(instruction);
+        Br { offset, nzp }
     }
 }
 
@@ -857,11 +865,7 @@ where
     fn from(instruction: u16) -> Self {
         let opcode = instruction >> 12;
         match opcode {
-            0b0000 => {
-                let offset = Reg::poff9(instruction);
-                let nzp = Reg::fncd(instruction);
-                Box::new(Br { offset, nzp })
-            }
+            0b0000 => Box::new(Br::from(instruction)),
             0b0001 => {
                 if Reg::fimm(instruction) {
                     Box::new(AddConst::from(instruction))
@@ -1101,6 +1105,45 @@ mod tests {
 
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001 + 0b11111111111);
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
+    }
+
+    #[test]
+    fn test_exec_br() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::Rcnd, 0b0000000000000100);
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_100_111111111.into(); // BrN offset=511
+        op.execute(&mut vm);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 + 0b111111111);
+
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::Rcnd, 0b0000000000000100);
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_011_111111111.into(); // BrN offset=511
+        op.execute(&mut vm);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::Rcnd, 0b0000000000000010);
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_010_111111111.into(); // BrZ offset=511
+        op.execute(&mut vm);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 + 0b111111111);
+
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::Rcnd, 0b0000000000000010);
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_101_111111111.into(); // BrZ offset=511
+        op.execute(&mut vm);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::Rcnd, 0b0000000000000001);
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_001_111111111.into(); // BrP offset=511
+        op.execute(&mut vm);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 + 0b111111111);
+
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::Rcnd, 0b0000000000000001);
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_110_111111111.into(); // BrP offset=511
+        op.execute(&mut vm);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
