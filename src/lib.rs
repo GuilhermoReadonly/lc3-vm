@@ -330,6 +330,15 @@ where
     }
 }
 
+impl From<u16> for Ldi {
+    fn from(instruction: u16) -> Self {
+        Ldi {
+            dr: Reg::dr(instruction),
+            offset: Reg::poff9(instruction),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Ldr {
     dr: Reg,
@@ -837,11 +846,7 @@ where
                 dr: Reg::dr(instruction),
                 sr: Reg::sr1(instruction),
             }),
-            0b1010 => {
-                let dr = Reg::dr(instruction);
-                let offset = Reg::poff9(instruction);
-                Box::new(Ldi { dr, offset })
-            }
+            0b1010 => Box::new(Ldi::from(instruction)),
             0b1011 => {
                 let sr = Reg::dr(instruction);
                 let offset = Reg::poff9(instruction);
@@ -937,7 +942,20 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0010110111111111.into(); // Ld Dr=R6 offset=511
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::R6], 0b0000001011001110);
+        assert_eq!(vm.registers[&Reg::R6], 718);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+    }
+
+    #[test]
+    fn test_exec_ldi() {
+        let mut vm = VM::default();
+        vm.memory.write(0x31FF, 7);
+        vm.memory.write(7, 18);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1010101111111111.into(); // Ld Dr=R5 offset=511
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::R5], 18);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
