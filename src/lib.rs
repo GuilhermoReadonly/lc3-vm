@@ -524,6 +524,13 @@ where
     }
 }
 
+impl From<u16> for Jmp {
+    fn from(instruction: u16) -> Self {
+        let base = Reg::sr1(instruction);
+        Jmp { base }
+    }
+}
+
 #[derive(Debug)]
 struct Jsrr {
     base: Reg,
@@ -874,10 +881,7 @@ where
             0b1001 => Box::new(Not::from(instruction)),
             0b1010 => Box::new(Ldi::from(instruction)),
             0b1011 => Box::new(Sti::from(instruction)),
-            0b1100 => {
-                let base = Reg::sr1(instruction);
-                Box::new(Jmp { base })
-            }
+            0b1100 => Box::new(Jmp::from(instruction)),
             // 0b1101 => Op::Unused,
             0b1110 => Box::new(Lea::from(instruction)),
             0b1111 => {
@@ -1053,6 +1057,17 @@ mod tests {
 
         assert_eq!(vm.memory.read(0xFF3F), 718);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+    }
+
+    #[test]
+    fn test_exec_jmp() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R6, 0xFF00);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1100_000_110_000000.into(); // Jmp BaseR=R6
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::Rpc], 0xFF00);
     }
 
     #[test]
