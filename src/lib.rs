@@ -475,6 +475,14 @@ where
     }
 }
 
+impl From<u16> for Not {
+    fn from(instruction: u16) -> Self {
+        let dr = Reg::dr(instruction);
+        let sr = Reg::sr1(instruction);
+        Not { dr, sr }
+    }
+}
+
 #[derive(Debug)]
 struct Jmp {
     base: Reg,
@@ -847,10 +855,7 @@ where
                 Box::new(Str { sr, base, offset })
             }
             // 0b1000 => Op::Rti,
-            0b1001 => Box::new(Not {
-                dr: Reg::dr(instruction),
-                sr: Reg::sr1(instruction),
-            }),
+            0b1001 => Box::new(Not::from(instruction)),
             0b1010 => Box::new(Ldi::from(instruction)),
             0b1011 => {
                 let sr = Reg::dr(instruction);
@@ -985,6 +990,18 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R3], 0x31FF);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+    }
+
+    #[test]
+    fn test_exec_not() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R1, 0xF0F0);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1001000001111111.into(); // Not Dr=R0 Sr=R1
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::R0], 0x0F0F);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
