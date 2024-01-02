@@ -444,6 +444,14 @@ where
     }
 }
 
+impl From<u16> for Sti {
+    fn from(instruction: u16) -> Self {
+        let sr = Reg::dr(instruction);
+        let offset = Reg::poff9(instruction);
+        Sti { sr, offset }
+    }
+}
+
 #[derive(Debug)]
 struct Str {
     sr: Reg,
@@ -861,11 +869,7 @@ where
             // 0b1000 => Op::Rti,
             0b1001 => Box::new(Not::from(instruction)),
             0b1010 => Box::new(Ldi::from(instruction)),
-            0b1011 => {
-                let sr = Reg::dr(instruction);
-                let offset = Reg::poff9(instruction);
-                Box::new(Sti { sr, offset })
-            }
+            0b1011 => Box::new(Sti::from(instruction)),
             0b1100 => {
                 let base = Reg::sr1(instruction);
                 Box::new(Jmp { base })
@@ -1018,6 +1022,20 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0x31FF), 718);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+    }
+
+    #[test]
+    fn test_exec_sti() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R3, 718);
+        vm.memory.write(0x31FF, 0xFFFF);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1011011111111111.into(); // St Sr=R3 offset=511
+        op.execute(&mut vm);
+
+        assert_eq!(vm.memory.read(0xFFFF), 718);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
     #[test]
