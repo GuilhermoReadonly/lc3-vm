@@ -542,10 +542,17 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.registers[&Reg::Rpc];
+        let rpc = vm.registers[&Reg::Rpc].wrapping_add(1);
         vm.registers.insert(Reg::R7, rpc);
         let new_rpc = vm.registers[&self.base];
         vm.registers.insert(Reg::Rpc, new_rpc);
+    }
+}
+
+impl From<u16> for Jsrr {
+    fn from(instruction: u16) -> Self {
+        let base = Reg::sr1(instruction);
+        Jsrr { base }
     }
 }
 
@@ -863,9 +870,7 @@ where
                         offset: Reg::poff11(instruction),
                     })
                 } else {
-                    Box::new(Jsrr {
-                        base: Reg::sr1(instruction),
-                    })
+                    Box::new(Jsrr::from(instruction))
                 }
             }
             0b0101 => {
@@ -953,7 +958,7 @@ mod tests {
         let mut vm = VM::default();
         vm.registers.insert(Reg::R6, 0b1010101010101010);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0101000110110101.into();
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0101_000_110_110101.into(); // AndConst Dr=R0 Sr=R6 const=110101
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1010101010100000);
@@ -965,7 +970,7 @@ mod tests {
         let mut vm = VM::default();
         vm.memory.write(0x31FF, 718);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0010110111111111.into(); // Ld Dr=R6 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0010_110_111111111.into(); // Ld Dr=R6 offset=511
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R6], 718);
@@ -978,7 +983,7 @@ mod tests {
         vm.memory.write(0x31FF, 7);
         vm.memory.write(7, 18);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1010101111111111.into(); // Ldi Dr=R5 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1010_101_111111111.into(); // Ldi Dr=R5 offset=511
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R5], 18);
@@ -991,7 +996,7 @@ mod tests {
         vm.memory.write(0xFFFF, 718);
         vm.registers.insert(Reg::R7, 0xFFFE);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0110010111000001.into(); // Ldr Dr=R2 baseR=R7 offset=1
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0110_010_111_000001.into(); // Ldr Dr=R2 baseR=R7 offset=1
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R2], 718);
@@ -1002,7 +1007,7 @@ mod tests {
     fn test_exec_lea() {
         let mut vm = VM::default();
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1110011111111111.into(); // Lea Dr=R3 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1110_011_111111111.into(); // Lea Dr=R3 offset=511
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R3], 0x31FF);
@@ -1014,7 +1019,7 @@ mod tests {
         let mut vm = VM::default();
         vm.registers.insert(Reg::R1, 0xF0F0);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1001000001111111.into(); // Not Dr=R0 Sr=R1
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1001_000_001_111111.into(); // Not Dr=R0 Sr=R1
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0x0F0F);
@@ -1026,7 +1031,7 @@ mod tests {
         let mut vm = VM::default();
         vm.registers.insert(Reg::R2, 718);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0011010111111111.into(); // St Sr=R2 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0011_010_111111111.into(); // St Sr=R2 offset=511
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0x31FF), 718);
@@ -1039,7 +1044,7 @@ mod tests {
         vm.registers.insert(Reg::R3, 718);
         vm.memory.write(0x31FF, 0xFFFF);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1011011111111111.into(); // Sti Sr=R3 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1011_011_111111111.into(); // Sti Sr=R3 offset=511
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0xFFFF), 718);
@@ -1052,7 +1057,7 @@ mod tests {
         vm.registers.insert(Reg::R4, 718);
         vm.registers.insert(Reg::R5, 0xFF00);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0111100101111111.into(); // Str Sr=R4 BaseR=R5 offset=63
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0111_100_101_111111.into(); // Str Sr=R4 BaseR=R5 offset=63
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0xFF3F), 718);
@@ -1068,6 +1073,18 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::Rpc], 0xFF00);
+    }
+
+    #[test]
+    fn test_exec_jsrr() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R0, 0xFF00);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0100_0_00_000_000000.into(); // JsrR BaseR=R0
+        op.execute(&mut vm);
+
+        assert_eq!(vm.registers[&Reg::Rpc], 0xFF00);
+        assert_eq!(vm.registers[&Reg::R7], 0x3001);
     }
 
     #[test]
