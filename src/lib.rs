@@ -416,6 +416,14 @@ where
     }
 }
 
+impl From<u16> for St {
+    fn from(instruction: u16) -> Self {
+        let sr = Reg::dr(instruction);
+        let offset = Reg::poff9(instruction);
+        St { sr, offset }
+    }
+}
+
 #[derive(Debug)]
 struct Sti {
     sr: Reg,
@@ -824,11 +832,7 @@ where
                 }
             }
             0b0010 => Box::new(Ld::from(instruction)),
-            0b0011 => {
-                let sr = Reg::dr(instruction);
-                let offset = Reg::poff9(instruction);
-                Box::new(St { sr, offset })
-            }
+            0b0011 => Box::new(St::from(instruction)),
             0b0100 => {
                 if Reg::get_nth_bit(instruction, 11) {
                     Box::new(Jsr {
@@ -1003,6 +1007,17 @@ mod tests {
 
         assert_eq!(vm.registers[&Reg::R0], 0x0F0F);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+    }
+
+    #[test]
+    fn test_exec_st() {
+        let mut vm = VM::default();
+        vm.registers.insert(Reg::R2, 718);
+
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0011010111111111.into(); // St Sr=R2 offset=511
+        op.execute(&mut vm);
+
+        assert_eq!(vm.memory.read(0x31FF), 718);
     }
 
     #[test]
