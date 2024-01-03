@@ -51,20 +51,19 @@ where
 
             let instruction = self.memory.read(current_addr);
 
-            println!("State: {:#?}", self.registers);
-
-            print!("Instruction ({i_count}): {instruction:016b}.");
-
+            
             let op: Box<dyn Instruction<R, W>> = instruction.into();
-
-            println!(" Decoded as {op:?}");
+            
+            // println!("State: {:#?}", self.registers);
+            // print!("Instruction ({i_count}): {instruction:016b}.");
+            // println!(" Decoded as {op:?}");
 
             op.execute(self);
             i_count += 1;
 
-            if i_count % 100_000_000 == 0 {
-                println!("{i_count} instructions executed.");
-            }
+            // if i_count % 100_000_000 == 0 {
+            //     println!("{i_count} instructions executed.");
+            // }
         }
         println!("{i_count} instructions executed.");
     }
