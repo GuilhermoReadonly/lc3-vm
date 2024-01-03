@@ -69,11 +69,12 @@ where
         println!("{i_count} instructions executed.");
     }
 
-    fn inc_rpc(&mut self) {
+    fn inc_rpc(&mut self) -> u16{
         let next_addr = self.registers[&Reg::Rpc] + 1;
         self.registers.insert(Reg::Rpc, next_addr);
+        next_addr
     }
-    fn uf(&mut self, r: &Reg) {
+    fn set_nzp(&mut self, r: &Reg) {
         if self.registers[r] == 0 {
             self.registers.insert(Reg::Rcnd, 1 << 1);
         } else if self.registers[r] >> 15 == 1 {
@@ -181,51 +182,6 @@ impl Reg {
     fn sr2(instruction: u16) -> Self {
         let reg_nb = instruction & 0b0000000000000111;
         reg_nb.into()
-    }
-    fn imm(instruction: u16) -> u16 {
-        instruction & 0b0000000000011111
-    }
-
-    /// if the bth bit of n is 1, fill up n with 1s the remaining bits else return n
-    fn sext(n: u16, b: usize) -> u16 {
-        if (n >> (b - 1)) & 1 == 1 {
-            n | (0xFFFF << b)
-        } else {
-            n
-        }
-    }
-
-    /// get offset 9
-    fn poff9(n: u16) -> u16 {
-        n & 0x1FF
-    }
-
-    /// get offset 11
-    fn poff11(n: u16) -> u16 {
-        n & 0x7FF
-    }
-    /// get offset 6
-    fn poff(n: u16) -> u16 {
-        n & 0x3F
-    }
-
-    /// Sign extend imm5
-    fn sextimm(n: u16) -> u16 {
-        Reg::sext(Reg::imm(n), 5)
-    }
-
-    /// Get the 5th bit as boolean
-    fn fimm(instruction: u16) -> bool {
-        Reg::get_nth_bit(instruction, 5)
-    }
-
-    /// Extract the bits b11, b10, b9
-    fn fncd(instruction: u16) -> u16 {
-        (instruction >> 9) & 07
-    }
-
-    fn get_nth_bit(value: u16, n: usize) -> bool {
-        ((value >> n) & 1) == 1
     }
 }
 

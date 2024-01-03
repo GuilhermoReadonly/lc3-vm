@@ -3,6 +3,44 @@ use std::io::{BufRead, Write};
 
 use crate::{Reg, VM};
 
+fn imm5(instruction: u16) -> u16 {
+    instruction & 0b0000_0000_0001_1111
+}
+
+/// sext(n, b) Sign-extend n. The most significant bit of n is replicated as many times as necessary to
+// extend n to 16 bits. For example, if n = 110000, then SEXT(n, 6) = 1111 1111 1111 0000
+fn sext(n: u16, b: usize) -> u16 {
+    if (n >> (b - 1)) & 1 == 1 {
+        n | (0xFFFF << b)
+    } else {
+        n
+    }
+}
+
+/// get offset 9
+fn off9(n: u16) -> u16 {
+    n & 0x1FF
+}
+
+/// get offset 6
+fn off6(n: u16) -> u16 {
+    n & 0x3F
+}
+
+/// get offset 11
+fn off11(n: u16) -> u16 {
+    n & 0x7FF
+}
+
+/// Extract the bits b11, b10, b9
+fn fncd(instruction: u16) -> u16 {
+    (instruction >> 9) & 07
+}
+
+fn get_nth_bit(instruction: u16, n: usize) -> bool {
+    ((instruction >> n) & 1) == 1
+}
+
 pub(crate) trait Instruction<R, W>: Debug
 where
     R: BufRead,
@@ -11,11 +49,71 @@ where
     fn execute(&self, vm: &mut VM<R, W>);
 }
 
+impl<R, W> From<u16> for Box<dyn Instruction<R, W>>
+where
+    R: BufRead,
+    W: Write,
+{
+    fn from(instruction: u16) -> Self {
+        let opcode = instruction >> 12;
+        match opcode {
+            0b0000 => Box::new(Br::from(instruction)),
+            0b0001 => {
+                if get_nth_bit(instruction, 5) {
+                    Box::new(AddConst::from(instruction))
+                } else {
+                    Box::new(AddReg::from(instruction))
+                }
+            }
+            0b0010 => Box::new(Ld::from(instruction)),
+            0b0011 => Box::new(St::from(instruction)),
+            0b0100 => {
+                if get_nth_bit(instruction, 11) {
+                    Box::new(Jsr::from(instruction))
+                } else {
+                    Box::new(Jsrr::from(instruction))
+                }
+            }
+            0b0101 => {
+                if get_nth_bit(instruction, 5) {
+                    Box::new(AndConst::from(instruction))
+                } else {
+                    Box::new(AndReg::from(instruction))
+                }
+            }
+            0b0110 => Box::new(Ldr::from(instruction)),
+            0b0111 => Box::new(Str::from(instruction)),
+            // 0b1000 => Op::Rti,
+            0b1001 => Box::new(Not::from(instruction)),
+            0b1010 => Box::new(Ldi::from(instruction)),
+            0b1011 => Box::new(Sti::from(instruction)),
+            0b1100 => Box::new(Jmp::from(instruction)),
+            // 0b1101 => Op::Unused,
+            0b1110 => Box::new(Lea::from(instruction)),
+            0b1111 => {
+                let trap_vect = instruction & 0b0000000011111111;
+                match trap_vect {
+                    0x20 => Box::new(TrapGetC),
+                    0x21 => Box::new(TrapOutC),
+                    0x22 => Box::new(TrapPuts),
+                    0x23 => Box::new(TrapIn),
+                    0x24 => Box::new(TrapPutsp),
+                    0x25 => Box::new(TrapHalt),
+                    0x26 => Box::new(TrapInu16),
+                    0x27 => Box::new(TrapOutu16),
+                    _ => panic!("Trap vect {trap_vect:016b} as no matching trap"),
+                }
+            }
+            _ => panic!("Op code {instruction:016b} as no matching opcode"),
+        }
+    }
+}
+
 #[derive(Debug)]
 struct AddConst {
     dr: Reg,
     sr: Reg,
-    value: u16,
+    imm5: u16,
 }
 
 impl<R, W> Instruction<R, W> for AddConst
@@ -24,10 +122,10 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let result = vm.registers[&self.sr].wrapping_add(self.value);
-        vm.registers.insert(self.dr, result);
-        vm.uf(&self.dr);
         vm.inc_rpc();
+        let result = vm.registers[&self.sr].wrapping_add(sext(self.imm5, 5));
+        vm.registers.insert(self.dr, result);
+        vm.set_nzp(&self.dr);
     }
 }
 
@@ -36,7 +134,7 @@ impl From<u16> for AddConst {
         AddConst {
             dr: Reg::dr(instruction),
             sr: Reg::sr1(instruction),
-            value: Reg::sextimm(instruction),
+            imm5: imm5(instruction),
         }
     }
 }
@@ -54,10 +152,10 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        vm.inc_rpc();
         let result = vm.registers[&self.sr1].wrapping_add(vm.registers[&self.sr2]);
         vm.registers.insert(self.dr, result);
-        vm.uf(&self.dr);
-        vm.inc_rpc();
+        vm.set_nzp(&self.dr);
     }
 }
 
@@ -75,7 +173,7 @@ impl From<u16> for AddReg {
 struct AndConst {
     dr: Reg,
     sr: Reg,
-    value: u16,
+    imm5: u16,
 }
 
 impl<R, W> Instruction<R, W> for AndConst
@@ -84,10 +182,10 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let result = vm.registers[&self.sr] & self.value;
-        vm.registers.insert(self.dr, result);
-        vm.uf(&self.dr);
         vm.inc_rpc();
+        let result = vm.registers[&self.sr] & sext(self.imm5, 5);
+        vm.registers.insert(self.dr, result);
+        vm.set_nzp(&self.dr);
     }
 }
 
@@ -96,7 +194,7 @@ impl From<u16> for AndConst {
         AndConst {
             dr: Reg::dr(instruction),
             sr: Reg::sr1(instruction),
-            value: Reg::sextimm(instruction),
+            imm5: imm5(instruction),
         }
     }
 }
@@ -114,10 +212,10 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        vm.inc_rpc();
         let result = vm.registers[&self.sr1] & vm.registers[&self.sr2];
         vm.registers.insert(self.dr, result);
-        vm.uf(&self.dr);
-        vm.inc_rpc();
+        vm.set_nzp(&self.dr);
     }
 }
 
@@ -134,7 +232,7 @@ impl From<u16> for AndReg {
 #[derive(Debug)]
 struct Ld {
     dr: Reg,
-    offset: u16,
+    offset9: u16,
 }
 
 impl<R, W> Instruction<R, W> for Ld
@@ -143,11 +241,11 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let address = vm.registers[&Reg::Rpc] + self.offset;
+        let rpc = vm.inc_rpc();
+        let address = rpc.wrapping_add(sext(self.offset9, 9));
         let result = vm.memory.read(address);
         vm.registers.insert(self.dr, result);
-        vm.uf(&self.dr);
-        vm.inc_rpc();
+        vm.set_nzp(&self.dr);
     }
 }
 
@@ -155,7 +253,7 @@ impl From<u16> for Ld {
     fn from(instruction: u16) -> Self {
         Ld {
             dr: Reg::dr(instruction),
-            offset: Reg::poff9(instruction),
+            offset9: off9(instruction),
         }
     }
 }
@@ -163,7 +261,7 @@ impl From<u16> for Ld {
 #[derive(Debug)]
 struct Ldi {
     dr: Reg,
-    offset: u16,
+    offset9: u16,
 }
 
 impl<R, W> Instruction<R, W> for Ldi
@@ -172,12 +270,12 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let address1 = vm.registers[&Reg::Rpc] + self.offset;
+        let rpc = vm.inc_rpc();
+        let address1 = rpc.wrapping_add(sext(self.offset9, 9));
         let address2 = vm.memory.read(address1);
         let result = vm.memory.read(address2);
         vm.registers.insert(self.dr, result);
-        vm.uf(&self.dr);
-        vm.inc_rpc();
+        vm.set_nzp(&self.dr);
     }
 }
 
@@ -185,7 +283,7 @@ impl From<u16> for Ldi {
     fn from(instruction: u16) -> Self {
         Ldi {
             dr: Reg::dr(instruction),
-            offset: Reg::poff9(instruction),
+            offset9: off9(instruction),
         }
     }
 }
@@ -194,7 +292,7 @@ impl From<u16> for Ldi {
 struct Ldr {
     dr: Reg,
     base: Reg,
-    offset: u16,
+    offset6: u16,
 }
 
 impl<R, W> Instruction<R, W> for Ldr
@@ -203,11 +301,11 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let address = vm.registers[&self.base] + self.offset;
+        vm.inc_rpc();
+        let address = vm.registers[&self.base].wrapping_add(sext(self.offset6, 6));
         let result = vm.memory.read(address);
         vm.registers.insert(self.dr, result);
-        vm.uf(&self.dr);
-        vm.inc_rpc();
+        vm.set_nzp(&self.dr);
     }
 }
 
@@ -216,7 +314,7 @@ impl From<u16> for Ldr {
         Ldr {
             dr: Reg::dr(instruction),
             base: Reg::sr1(instruction),
-            offset: Reg::poff(instruction),
+            offset6: off6(instruction),
         }
     }
 }
@@ -224,7 +322,7 @@ impl From<u16> for Ldr {
 #[derive(Debug)]
 struct Lea {
     dr: Reg,
-    offset: u16,
+    offset9: u16,
 }
 
 impl<R, W> Instruction<R, W> for Lea
@@ -233,25 +331,25 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let address = vm.registers[&Reg::Rpc] + self.offset;
+        let rpc = vm.inc_rpc();
+        let address = rpc.wrapping_add(sext(self.offset9, 9));
         vm.registers.insert(self.dr, address);
-        vm.uf(&self.dr);
-        vm.inc_rpc();
+        vm.set_nzp(&self.dr);
     }
 }
 
 impl From<u16> for Lea {
     fn from(instruction: u16) -> Self {
         let dr = Reg::dr(instruction);
-        let offset = Reg::poff9(instruction);
-        Lea { dr, offset }
+        let offset9 = off9(instruction);
+        Lea { dr, offset9 }
     }
 }
 
 #[derive(Debug)]
 struct St {
     sr: Reg,
-    offset: u16,
+    offset9: u16,
 }
 
 impl<R, W> Instruction<R, W> for St
@@ -260,25 +358,25 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let address = vm.registers[&Reg::Rpc] + self.offset;
+        let rpc = vm.inc_rpc();
+        let address = rpc.wrapping_add(sext(self.offset9, 9));
         let value = vm.registers[&self.sr];
         vm.memory.write(address, value);
-        vm.inc_rpc();
     }
 }
 
 impl From<u16> for St {
     fn from(instruction: u16) -> Self {
         let sr = Reg::dr(instruction);
-        let offset = Reg::poff9(instruction);
-        St { sr, offset }
+        let offset9 = off9(instruction);
+        St { sr, offset9 }
     }
 }
 
 #[derive(Debug)]
 struct Sti {
     sr: Reg,
-    offset: u16,
+    offset9: u16,
 }
 
 impl<R, W> Instruction<R, W> for Sti
@@ -287,19 +385,19 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let address1 = vm.registers[&Reg::Rpc] + self.offset;
+        let rpc = vm.inc_rpc();
+        let address1 = rpc.wrapping_add(sext(self.offset9, 9));
         let address2 = vm.memory.read(address1);
         let value = vm.registers[&self.sr];
         vm.memory.write(address2, value);
-        vm.inc_rpc();
     }
 }
 
 impl From<u16> for Sti {
     fn from(instruction: u16) -> Self {
         let sr = Reg::dr(instruction);
-        let offset = Reg::poff9(instruction);
-        Sti { sr, offset }
+        let offset9 = off9(instruction);
+        Sti { sr, offset9 }
     }
 }
 
@@ -307,7 +405,7 @@ impl From<u16> for Sti {
 struct Str {
     sr: Reg,
     base: Reg,
-    offset: u16,
+    offset6: u16,
 }
 
 impl<R, W> Instruction<R, W> for Str
@@ -316,10 +414,10 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let address = vm.registers[&self.base] + self.offset;
+        vm.inc_rpc();
+        let address = vm.registers[&self.base].wrapping_add(sext(self.offset6, 6));
         let value = vm.registers[&self.sr];
         vm.memory.write(address, value);
-        vm.inc_rpc();
     }
 }
 
@@ -327,8 +425,8 @@ impl From<u16> for Str {
     fn from(instruction: u16) -> Self {
         let sr = Reg::dr(instruction);
         let base = Reg::sr1(instruction);
-        let offset = Reg::poff(instruction);
-        Str { sr, base, offset }
+        let offset6 = off6(instruction);
+        Str { sr, base, offset6 }
     }
 }
 
@@ -344,10 +442,10 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        vm.inc_rpc();
         let result = !vm.registers[&self.sr];
         vm.registers.insert(self.dr, result);
-        vm.uf(&self.dr);
-        vm.inc_rpc();
+        vm.set_nzp(&self.dr);
     }
 }
 
@@ -393,7 +491,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.registers[&Reg::Rpc].wrapping_add(1);
+        let rpc = vm.inc_rpc();
         vm.registers.insert(Reg::R7, rpc);
         let new_rpc = vm.registers[&self.base];
         vm.registers.insert(Reg::Rpc, new_rpc);
@@ -409,7 +507,7 @@ impl From<u16> for Jsrr {
 
 #[derive(Debug)]
 struct Jsr {
-    offset: u16,
+    offset11: u16,
 }
 
 impl<R, W> Instruction<R, W> for Jsr
@@ -418,23 +516,23 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.registers[&Reg::Rpc].wrapping_add(1);
+        let rpc = vm.inc_rpc();
         vm.registers.insert(Reg::R7, rpc);
-        let new_rpc = rpc + self.offset;
+        let new_rpc = rpc.wrapping_add(sext(self.offset11, 11));
         vm.registers.insert(Reg::Rpc, new_rpc);
     }
 }
 
 impl From<u16> for Jsr {
     fn from(instruction: u16) -> Self {
-        let offset = Reg::poff11(instruction);
-        Jsr { offset }
+        let offset11 = off11(instruction);
+        Jsr { offset11 }
     }
 }
 
 #[derive(Debug)]
 struct Br {
-    offset: u16,
+    offset9: u16,
     nzp: u16,
 }
 
@@ -444,20 +542,19 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        let rpc = vm.inc_rpc();
         if self.nzp & vm.registers[&Reg::Rcnd] > 0 {
-            let rpc = vm.registers[&Reg::Rpc].wrapping_add(1);
-            vm.registers.insert(Reg::Rpc, rpc.wrapping_add(self.offset));
-        } else {
-            vm.inc_rpc();
+            vm.registers
+                .insert(Reg::Rpc, rpc.wrapping_add(sext(self.offset9, 9)));
         }
     }
 }
 
 impl From<u16> for Br {
     fn from(instruction: u16) -> Self {
-        let offset = Reg::poff9(instruction);
-        let nzp = Reg::fncd(instruction);
-        Br { offset, nzp }
+        let offset9 = off9(instruction);
+        let nzp = fncd(instruction);
+        Br { offset9, nzp }
     }
 }
 
@@ -470,11 +567,14 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        let rpc = vm.inc_rpc();
+        vm.registers.insert(Reg::R7, rpc);
+        vm.registers.insert(Reg::Rpc, 0x20);
+
         let mut buf = [0; 1];
         let _ = vm.reader.read(&mut buf);
         let c = buf[0] as u16;
         vm.registers.insert(Reg::R0, c);
-        vm.inc_rpc();
     }
 }
 
@@ -487,9 +587,12 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        let rpc = vm.inc_rpc();
+        vm.registers.insert(Reg::R7, rpc);
+        vm.registers.insert(Reg::Rpc, 0x21);
+
         let c = vm.registers[&Reg::R0];
         let _ = vm.writer.write_all(&[c as u8][..]);
-        vm.inc_rpc();
     }
 }
 
@@ -502,6 +605,10 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        let rpc = vm.inc_rpc();
+        vm.registers.insert(Reg::R7, rpc);
+        vm.registers.insert(Reg::Rpc, 0x22);
+
         let address = vm.registers[&Reg::R0];
 
         let mut c = vm.memory.read(address);
@@ -512,7 +619,27 @@ where
             i += 1;
             c = vm.memory.read(address + i);
         }
-        vm.inc_rpc();
+    }
+}
+
+#[derive(Debug)]
+struct TrapIn;
+
+impl<R, W> Instruction<R, W> for TrapIn
+where
+    R: BufRead,
+    W: Write,
+{
+    fn execute(&self, vm: &mut VM<R, W>) {
+        let rpc = vm.inc_rpc();
+        vm.registers.insert(Reg::R7, rpc);
+        vm.registers.insert(Reg::Rpc, 0x23);
+
+        let mut buf: [u8; 1] = [0; 1];
+        let _ = vm.reader.read(&mut buf);
+        let c = buf[0] as u16;
+        vm.registers.insert(Reg::R0, c);
+        let _ = vm.writer.write_all(&buf[..]);
     }
 }
 
@@ -525,6 +652,10 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        let rpc = vm.inc_rpc();
+        vm.registers.insert(Reg::R7, rpc);
+        vm.registers.insert(Reg::Rpc, 0x24);
+
         let address = vm.registers[&Reg::R0];
 
         let mut c = vm.memory.read(address);
@@ -538,25 +669,6 @@ where
             i += 1;
             c = vm.memory.read(address + i);
         }
-        vm.inc_rpc();
-    }
-}
-
-#[derive(Debug)]
-struct TrapIn;
-
-impl<R, W> Instruction<R, W> for TrapIn
-where
-    R: BufRead,
-    W: Write,
-{
-    fn execute(&self, vm: &mut VM<R, W>) {
-        let mut buf: [u8; 1] = [0; 1];
-        let _ = vm.reader.read(&mut buf);
-        let c = buf[0] as u16;
-        vm.registers.insert(Reg::R0, c);
-        let _ = vm.writer.write_all(&buf[..]);
-        vm.inc_rpc();
     }
 }
 
@@ -582,6 +694,10 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        let rpc = vm.inc_rpc();
+        vm.registers.insert(Reg::R7, rpc);
+        vm.registers.insert(Reg::Rpc, 0x26);
+
         let mut buf: [u8; 1] = [0; 1];
         let mut all_characters = String::from("");
         let mut character: u8 = 0;
@@ -596,7 +712,6 @@ where
 
         let number: u16 = u16::from_str_radix(&all_characters, 10).expect("u16 conversion failed");
         vm.registers.insert(Reg::R0, number);
-        vm.inc_rpc();
     }
 }
 
@@ -609,71 +724,14 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
+        let rpc = vm.inc_rpc();
+        vm.registers.insert(Reg::R7, rpc);
+        vm.registers.insert(Reg::Rpc, 0x27);
+
         let c = vm.registers[&Reg::R0];
         let c_string = c.to_string();
         for character in c_string.as_bytes() {
             let _ = vm.writer.write_all(&[*character][..]);
-        }
-        vm.inc_rpc();
-    }
-}
-
-impl<R, W> From<u16> for Box<dyn Instruction<R, W>>
-where
-    R: BufRead,
-    W: Write,
-{
-    fn from(instruction: u16) -> Self {
-        let opcode = instruction >> 12;
-        match opcode {
-            0b0000 => Box::new(Br::from(instruction)),
-            0b0001 => {
-                if Reg::fimm(instruction) {
-                    Box::new(AddConst::from(instruction))
-                } else {
-                    Box::new(AddReg::from(instruction))
-                }
-            }
-            0b0010 => Box::new(Ld::from(instruction)),
-            0b0011 => Box::new(St::from(instruction)),
-            0b0100 => {
-                if Reg::get_nth_bit(instruction, 11) {
-                    Box::new(Jsr::from(instruction))
-                } else {
-                    Box::new(Jsrr::from(instruction))
-                }
-            }
-            0b0101 => {
-                if Reg::fimm(instruction) {
-                    Box::new(AndConst::from(instruction))
-                } else {
-                    Box::new(AndReg::from(instruction))
-                }
-            }
-            0b0110 => Box::new(Ldr::from(instruction)),
-            0b0111 => Box::new(Str::from(instruction)),
-            // 0b1000 => Op::Rti,
-            0b1001 => Box::new(Not::from(instruction)),
-            0b1010 => Box::new(Ldi::from(instruction)),
-            0b1011 => Box::new(Sti::from(instruction)),
-            0b1100 => Box::new(Jmp::from(instruction)),
-            // 0b1101 => Op::Unused,
-            0b1110 => Box::new(Lea::from(instruction)),
-            0b1111 => {
-                let trap_vect = instruction & 0b0000000011111111;
-                match trap_vect {
-                    0x20 => Box::new(TrapGetC),
-                    0x21 => Box::new(TrapOutC),
-                    0x22 => Box::new(TrapPuts),
-                    0x23 => Box::new(TrapIn),
-                    0x24 => Box::new(TrapPutsp),
-                    0x25 => Box::new(TrapHalt),
-                    0x26 => Box::new(TrapInu16),
-                    0x27 => Box::new(TrapOutu16),
-                    _ => panic!("Trap vect {trap_vect:016b} as no matching trap"),
-                }
-            }
-            _ => panic!("Op code {instruction:016b} as no matching opcode"),
         }
     }
 }
@@ -690,7 +748,7 @@ mod tests {
         vm.registers.insert(Reg::R1, 0b0000000000000100); // 4
         vm.registers.insert(Reg::R2, 0b0000000000000011); // 3
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0001000001000010.into();
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0001_000_001_0_00_010.into();
         op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::R0], 0b0000000000000111); // 7
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
@@ -699,12 +757,12 @@ mod tests {
     #[test]
     fn test_exec_add_const() {
         let mut vm = VM::default();
-        vm.registers.insert(Reg::R3, 0b1111111111110111); // -9
+        vm.registers.insert(Reg::R3, 0b1111_1111_1111_0111); // -9
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0001000011100111.into();
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0001_000_011_1_00111.into(); // Add R3 + 7
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::R0], 0b1111111111111110); // -2
+        assert_eq!(vm.registers[&Reg::R0], 0b1111_1111_1111_1110); // -2
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
@@ -736,9 +794,9 @@ mod tests {
     #[test]
     fn test_exec_ld() {
         let mut vm = VM::default();
-        vm.memory.write(0x31FF, 718);
+        vm.memory.write(0x3000, 718);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0010_110_111111111.into(); // Ld Dr=R6 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0010_110_111111111.into(); // Ld Dr=R6 offset=-1
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R6], 718);
@@ -748,10 +806,10 @@ mod tests {
     #[test]
     fn test_exec_ldi() {
         let mut vm = VM::default();
-        vm.memory.write(0x31FF, 7);
+        vm.memory.write(0x3000, 7);
         vm.memory.write(7, 18);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1010_101_111111111.into(); // Ldi Dr=R5 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1010_101_111111111.into(); // Ldi Dr=R5 offset=-1
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R5], 18);
@@ -775,10 +833,10 @@ mod tests {
     fn test_exec_lea() {
         let mut vm = VM::default();
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1110_011_111111111.into(); // Lea Dr=R3 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1110_011_111111111.into(); // Lea Dr=R3 offset=-1
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::R3], 0x31FF);
+        assert_eq!(vm.registers[&Reg::R3], 0x3000);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
@@ -799,10 +857,10 @@ mod tests {
         let mut vm = VM::default();
         vm.registers.insert(Reg::R2, 718);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0011_010_111111111.into(); // St Sr=R2 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0011_010_111111111.into(); // St Sr=R2 offset=-1
         op.execute(&mut vm);
 
-        assert_eq!(vm.memory.read(0x31FF), 718);
+        assert_eq!(vm.memory.read(0x3000), 718);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
@@ -810,9 +868,9 @@ mod tests {
     fn test_exec_sti() {
         let mut vm = VM::default();
         vm.registers.insert(Reg::R3, 718);
-        vm.memory.write(0x31FF, 0xFFFF);
+        vm.memory.write(0x3000, 0xFFFF);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1011_011_111111111.into(); // Sti Sr=R3 offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1011_011_111111111.into(); // Sti Sr=R3 offset=-1
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0xFFFF), 718);
@@ -825,10 +883,10 @@ mod tests {
         vm.registers.insert(Reg::R4, 718);
         vm.registers.insert(Reg::R5, 0xFF00);
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0111_100_101_111111.into(); // Str Sr=R4 BaseR=R5 offset=63
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0111_100_101_111111.into(); // Str Sr=R4 BaseR=R5 offset=-1
         op.execute(&mut vm);
 
-        assert_eq!(vm.memory.read(0xFF3F), 718);
+        assert_eq!(vm.memory.read(0xFEFF), 718);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
 
@@ -859,10 +917,10 @@ mod tests {
     fn test_exec_jsr() {
         let mut vm = VM::default();
 
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0100_1_11111111111.into(); // Jsr offset=2047
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0100_1_11111111111.into(); // Jsr offset=-1
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 + 0b11111111111);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 -1 );
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
     }
 
@@ -870,37 +928,37 @@ mod tests {
     fn test_exec_br() {
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000100);
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_100_111111111.into(); // BrN offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_100_111111111.into(); // BrN offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 + 0b111111111);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 - 1);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000100);
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_011_111111111.into(); // BrN offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_011_111111111.into(); // BrN offset=-1
         op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000010);
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_010_111111111.into(); // BrZ offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_010_111111111.into(); // BrZ offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 + 0b111111111);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 - 1);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000010);
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_101_111111111.into(); // BrZ offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_101_111111111.into(); // BrZ offset=-1
         op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000001);
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_001_111111111.into(); // BrP offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_001_111111111.into(); // BrP offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 + 0b111111111);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 - 1);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000001);
-        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_110_111111111.into(); // BrP offset=511
+        let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_110_111111111.into(); // BrP offset=-1
         op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
     }
@@ -914,7 +972,8 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x20);
     }
 
     #[test]
@@ -926,7 +985,8 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41]);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x21);
     }
 
     #[test]
@@ -942,7 +1002,8 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41, 0x42, 0x43]);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x22);
     }
 
     #[test]
@@ -955,7 +1016,8 @@ mod tests {
 
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
         assert_eq!(vm.writer, vec![0x41]);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x23);
     }
 
     #[test]
@@ -967,7 +1029,8 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 255); // R0 contains 255
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x26);
     }
 
     #[test]
@@ -979,7 +1042,8 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![b'2', b'5', b'5']);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x27);
     }
 
     #[test]
@@ -995,7 +1059,8 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41, 0x42, 0x43, 0x44]);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x24);
     }
 
     #[test]
