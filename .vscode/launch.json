@@ -26,7 +26,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'toy-vm'",
+            "name": "Debug executable 'toy-vm' helloworld",
             "cargo": {
                 "args": [
                     "build",
@@ -39,6 +39,42 @@
                 }
             },
             "args": ["lc3-tools/hello_world.obj"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'toy-vm' 2048",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=toy-vm",
+                    "--package=toy-vm"
+                ],
+                "filter": {
+                    "name": "toy-vm",
+                    "kind": "bin"
+                }
+            },
+            "args": ["2048.obj"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'toy-vm' adder",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=toy-vm",
+                    "--package=toy-vm"
+                ],
+                "filter": {
+                    "name": "toy-vm",
+                    "kind": "bin"
+                }
+            },
+            "args": ["adder.obj"],
             "cwd": "${workspaceFolder}"
         },
         {

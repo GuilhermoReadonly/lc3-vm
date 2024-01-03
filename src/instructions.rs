@@ -569,7 +569,6 @@ where
     fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.inc_rpc();
         vm.registers.insert(Reg::R7, rpc);
-        vm.registers.insert(Reg::Rpc, 0x20);
 
         let mut buf = [0; 1];
         let _ = vm.reader.read(&mut buf);
@@ -589,7 +588,6 @@ where
     fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.inc_rpc();
         vm.registers.insert(Reg::R7, rpc);
-        vm.registers.insert(Reg::Rpc, 0x21);
 
         let c = vm.registers[&Reg::R0];
         let _ = vm.writer.write_all(&[c as u8][..]);
@@ -607,7 +605,6 @@ where
     fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.inc_rpc();
         vm.registers.insert(Reg::R7, rpc);
-        vm.registers.insert(Reg::Rpc, 0x22);
 
         let address = vm.registers[&Reg::R0];
 
@@ -633,7 +630,6 @@ where
     fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.inc_rpc();
         vm.registers.insert(Reg::R7, rpc);
-        vm.registers.insert(Reg::Rpc, 0x23);
 
         let mut buf: [u8; 1] = [0; 1];
         let _ = vm.reader.read(&mut buf);
@@ -654,7 +650,6 @@ where
     fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.inc_rpc();
         vm.registers.insert(Reg::R7, rpc);
-        vm.registers.insert(Reg::Rpc, 0x24);
 
         let address = vm.registers[&Reg::R0];
 
@@ -696,7 +691,6 @@ where
     fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.inc_rpc();
         vm.registers.insert(Reg::R7, rpc);
-        vm.registers.insert(Reg::Rpc, 0x26);
 
         let mut buf: [u8; 1] = [0; 1];
         let mut all_characters = String::from("");
@@ -726,7 +720,6 @@ where
     fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.inc_rpc();
         vm.registers.insert(Reg::R7, rpc);
-        vm.registers.insert(Reg::Rpc, 0x27);
 
         let c = vm.registers[&Reg::R0];
         let c_string = c.to_string();
@@ -973,7 +966,6 @@ mod tests {
 
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x20);
     }
 
     #[test]
@@ -986,7 +978,6 @@ mod tests {
 
         assert_eq!(vm.writer, vec![0x41]);
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x21);
     }
 
     #[test]
@@ -1003,7 +994,6 @@ mod tests {
 
         assert_eq!(vm.writer, vec![0x41, 0x42, 0x43]);
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x22);
     }
 
     #[test]
@@ -1017,7 +1007,6 @@ mod tests {
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
         assert_eq!(vm.writer, vec![0x41]);
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x23);
     }
 
     #[test]
@@ -1030,7 +1019,6 @@ mod tests {
 
         assert_eq!(vm.registers[&Reg::R0], 255); // R0 contains 255
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x26);
     }
 
     #[test]
@@ -1043,7 +1031,6 @@ mod tests {
 
         assert_eq!(vm.writer, vec![b'2', b'5', b'5']);
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x27);
     }
 
     #[test]
@@ -1060,7 +1047,6 @@ mod tests {
 
         assert_eq!(vm.writer, vec![0x41, 0x42, 0x43, 0x44]);
         assert_eq!(vm.registers[&Reg::R7], 0x3001);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x24);
     }
 
     #[test]
