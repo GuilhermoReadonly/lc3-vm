@@ -122,7 +122,6 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        vm.inc_rpc();
         let result = vm.registers[&self.sr].wrapping_add(sext(self.imm5, 5));
         vm.registers.insert(self.dr, result);
         vm.set_nzp(&self.dr);
@@ -152,7 +151,6 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        vm.inc_rpc();
         let result = vm.registers[&self.sr1].wrapping_add(vm.registers[&self.sr2]);
         vm.registers.insert(self.dr, result);
         vm.set_nzp(&self.dr);
@@ -182,7 +180,6 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        vm.inc_rpc();
         let result = vm.registers[&self.sr] & sext(self.imm5, 5);
         vm.registers.insert(self.dr, result);
         vm.set_nzp(&self.dr);
@@ -212,7 +209,6 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        vm.inc_rpc();
         let result = vm.registers[&self.sr1] & vm.registers[&self.sr2];
         vm.registers.insert(self.dr, result);
         vm.set_nzp(&self.dr);
@@ -241,7 +237,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         let address = rpc.wrapping_add(sext(self.offset9, 9));
         let result = vm.memory.read(address);
         vm.registers.insert(self.dr, result);
@@ -270,7 +266,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         let address1 = rpc.wrapping_add(sext(self.offset9, 9));
         let address2 = vm.memory.read(address1);
         let result = vm.memory.read(address2);
@@ -301,7 +297,6 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        vm.inc_rpc();
         let address = vm.registers[&self.base].wrapping_add(sext(self.offset6, 6));
         let result = vm.memory.read(address);
         vm.registers.insert(self.dr, result);
@@ -331,7 +326,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         let address = rpc.wrapping_add(sext(self.offset9, 9));
         vm.registers.insert(self.dr, address);
         vm.set_nzp(&self.dr);
@@ -358,7 +353,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         let address = rpc.wrapping_add(sext(self.offset9, 9));
         let value = vm.registers[&self.sr];
         vm.memory.write(address, value);
@@ -385,7 +380,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         let address1 = rpc.wrapping_add(sext(self.offset9, 9));
         let address2 = vm.memory.read(address1);
         let value = vm.registers[&self.sr];
@@ -414,7 +409,6 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        vm.inc_rpc();
         let address = vm.registers[&self.base].wrapping_add(sext(self.offset6, 6));
         let value = vm.registers[&self.sr];
         vm.memory.write(address, value);
@@ -442,7 +436,6 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        vm.inc_rpc();
         let result = !vm.registers[&self.sr];
         vm.registers.insert(self.dr, result);
         vm.set_nzp(&self.dr);
@@ -491,7 +484,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
         let new_rpc = vm.registers[&self.base];
         vm.registers.insert(Reg::Rpc, new_rpc);
@@ -516,7 +509,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
         let new_rpc = rpc.wrapping_add(sext(self.offset11, 11));
         vm.registers.insert(Reg::Rpc, new_rpc);
@@ -542,7 +535,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         if self.nzp & vm.registers[&Reg::Rcnd] > 0 {
             vm.registers
                 .insert(Reg::Rpc, rpc.wrapping_add(sext(self.offset9, 9)));
@@ -567,7 +560,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
 
         let mut buf = [0; 1];
@@ -586,7 +579,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
 
         let c = vm.registers[&Reg::R0];
@@ -603,7 +596,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
 
         let address = vm.registers[&Reg::R0];
@@ -628,7 +621,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
 
         let mut buf: [u8; 1] = [0; 1];
@@ -648,7 +641,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
 
         let address = vm.registers[&Reg::R0];
@@ -689,7 +682,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
 
         let mut buf: [u8; 1] = [0; 1];
@@ -718,7 +711,7 @@ where
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
-        let rpc = vm.inc_rpc();
+        let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
 
         let c = vm.registers[&Reg::R0];
@@ -744,7 +737,7 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0001_000_001_0_00_010.into();
         op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::R0], 0b0000000000000111); // 7
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -756,7 +749,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1111_1111_1111_1110); // -2
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -769,7 +762,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -781,32 +774,32 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1010101010100000);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
     fn test_exec_ld() {
         let mut vm = VM::default();
-        vm.memory.write(0x3000, 718);
+        vm.memory.write(0x2FFF, 718);
 
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0010_110_111111111.into(); // Ld Dr=R6 offset=-1
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R6], 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
     fn test_exec_ldi() {
         let mut vm = VM::default();
-        vm.memory.write(0x3000, 7);
+        vm.memory.write(0x2FFF, 7);
         vm.memory.write(7, 18);
 
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1010_101_111111111.into(); // Ldi Dr=R5 offset=-1
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R5], 18);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -819,7 +812,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R2], 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -829,8 +822,8 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1110_011_111111111.into(); // Lea Dr=R3 offset=-1
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::R3], 0x3000);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::R3], 0x2FFF);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -842,7 +835,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0x0F0F);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -853,21 +846,21 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0011_010_111111111.into(); // St Sr=R2 offset=-1
         op.execute(&mut vm);
 
-        assert_eq!(vm.memory.read(0x3000), 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.memory.read(0x2FFF), 718);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
     fn test_exec_sti() {
         let mut vm = VM::default();
         vm.registers.insert(Reg::R3, 718);
-        vm.memory.write(0x3000, 0xFFFF);
+        vm.memory.write(0x2FFF, 0xFFFF);
 
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1011_011_111111111.into(); // Sti Sr=R3 offset=-1
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0xFFFF), 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -880,7 +873,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0xFEFF), 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -903,7 +896,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::Rpc], 0xFF00);
-        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]
@@ -913,8 +906,8 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0100_1_11111111111.into(); // Jsr offset=-1
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 -1 );
-        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000 -1 );
+        assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]
@@ -923,37 +916,37 @@ mod tests {
         vm.registers.insert(Reg::Rcnd, 0b0000000000000100);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_100_111111111.into(); // BrN offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 - 1);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000 -1 );
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000100);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_011_111111111.into(); // BrN offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000010);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_010_111111111.into(); // BrZ offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 - 1);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000 -1 );
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000010);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_101_111111111.into(); // BrZ offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000001);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_001_111111111.into(); // BrP offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001 - 1);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000 -1 );
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::Rcnd, 0b0000000000000001);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_110_111111111.into(); // BrP offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3001);
+        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
     }
 
     #[test]
@@ -965,7 +958,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
-        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]
@@ -977,7 +970,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41]);
-        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]
@@ -993,7 +986,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41, 0x42, 0x43]);
-        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]
@@ -1006,7 +999,7 @@ mod tests {
 
         assert_eq!(vm.registers[&Reg::R0], 0x41); // 0x41 == A
         assert_eq!(vm.writer, vec![0x41]);
-        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]
@@ -1018,7 +1011,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 255); // R0 contains 255
-        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]
@@ -1030,7 +1023,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![b'2', b'5', b'5']);
-        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]
@@ -1046,7 +1039,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.writer, vec![0x41, 0x42, 0x43, 0x44]);
-        assert_eq!(vm.registers[&Reg::R7], 0x3001);
+        assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]

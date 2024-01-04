@@ -48,12 +48,12 @@ where
 
         while !self.halt {
             let current_addr = self.registers[&Reg::Rpc];
-
             let instruction = self.memory.read(current_addr);
 
-            
+            self.inc_rpc();
+
             let op: Box<dyn Instruction<R, W>> = instruction.into();
-            
+
             // println!("State: {:#?}", self.registers);
             // print!("Instruction ({i_count}): {instruction:016b}.");
             // println!(" Decoded as {op:?}");
@@ -68,10 +68,14 @@ where
         println!("{i_count} instructions executed.");
     }
 
-    fn inc_rpc(&mut self) -> u16{
+    fn inc_rpc(&mut self) -> u16 {
         let next_addr = self.registers[&Reg::Rpc] + 1;
         self.registers.insert(Reg::Rpc, next_addr);
         next_addr
+    }
+
+    fn get_rpc(&self) -> u16 {
+        self.registers[&Reg::Rpc]
     }
     fn set_nzp(&mut self, r: &Reg) {
         if self.registers[r] == 0 {
