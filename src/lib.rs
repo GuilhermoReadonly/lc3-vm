@@ -55,7 +55,7 @@ where
             let op: Box<dyn Instruction<R, W>> = instruction.into();
 
             // println!("State: {:#?}", self.registers);
-            // print!("Instruction ({i_count}): {instruction:016b}.");
+            // print!("({i_count}) Instruction {current_addr:04x}: {instruction:016b}/{instruction:04x}.");
             // println!(" Decoded as {op:?}");
 
             op.execute(self);
