@@ -564,7 +564,7 @@ where
         vm.registers.insert(Reg::R7, rpc);
 
         let mut buf = [0; 1];
-        let _ = vm.reader.read(&mut buf);
+        vm.reader.read(&mut buf).expect("read");
         let c = buf[0] as u16;
         vm.registers.insert(Reg::R0, c);
     }
@@ -626,7 +626,7 @@ where
         vm.registers.insert(Reg::R7, rpc);
 
         let mut buf: [u8; 1] = [0; 1];
-        let _ = vm.reader.read(&mut buf);
+        vm.reader.read(&mut buf).expect("read");
         let c = buf[0] as u16;
         vm.registers.insert(Reg::R0, c);
         vm.writer.write_all(&[c as u8][..]).expect("write_all");
@@ -692,7 +692,7 @@ where
         let mut character: u8 = 0;
         while character != 0x0A {
             // 0x0A: Enter
-            let _ = vm.reader.read(&mut buf);
+            vm.reader.read(&mut buf).expect("read");
             character = buf[0];
             if character.is_ascii_digit() {
                 all_characters.push(character as char);
