@@ -33,8 +33,8 @@ fn off11(n: u16) -> u16 {
 }
 
 /// Extract the bits b11, b10, b9
-fn fncd(instruction: u16) -> u16 {
-    (instruction >> 9) & 07
+fn get_cond(instruction: u16) -> u16 {
+    (instruction >> 9) & 0x07
 }
 
 fn get_nth_bit(instruction: u16, n: usize) -> bool {
@@ -462,7 +462,7 @@ where
 {
     fn execute(&self, vm: &mut VM<R, W>) {
         let new_rpc = vm.registers[&self.base];
-        vm.registers.insert(Reg::Rpc, new_rpc);
+        vm.registers.insert(Reg::RPC, new_rpc);
     }
 }
 
@@ -487,7 +487,7 @@ where
         let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
         let new_rpc = vm.registers[&self.base];
-        vm.registers.insert(Reg::Rpc, new_rpc);
+        vm.registers.insert(Reg::RPC, new_rpc);
     }
 }
 
@@ -512,7 +512,7 @@ where
         let rpc = vm.get_rpc();
         vm.registers.insert(Reg::R7, rpc);
         let new_rpc = rpc.wrapping_add(sext(self.offset11, 11));
-        vm.registers.insert(Reg::Rpc, new_rpc);
+        vm.registers.insert(Reg::RPC, new_rpc);
     }
 }
 
@@ -536,9 +536,9 @@ where
 {
     fn execute(&self, vm: &mut VM<R, W>) {
         let rpc = vm.get_rpc();
-        if self.nzp & vm.registers[&Reg::Rcnd] > 0 {
+        if self.nzp & vm.registers[&Reg::RCond] > 0 {
             vm.registers
-                .insert(Reg::Rpc, rpc.wrapping_add(sext(self.offset9, 9)));
+                .insert(Reg::RPC, rpc.wrapping_add(sext(self.offset9, 9)));
         }
     }
 }
@@ -546,7 +546,7 @@ where
 impl From<u16> for Br {
     fn from(instruction: u16) -> Self {
         let offset9 = off9(instruction);
-        let nzp = fncd(instruction);
+        let nzp = get_cond(instruction);
         Br { offset9, nzp }
     }
 }
@@ -737,7 +737,7 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0001_000_001_0_00_010.into();
         op.execute(&mut vm);
         assert_eq!(vm.registers[&Reg::R0], 0b0000000000000111); // 7
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -749,7 +749,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1111_1111_1111_1110); // -2
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -762,7 +762,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -774,7 +774,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0b1010101010100000);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -786,7 +786,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R6], 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -799,7 +799,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R5], 18);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -812,7 +812,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R2], 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -823,7 +823,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R3], 0x2FFF);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -835,7 +835,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.registers[&Reg::R0], 0x0F0F);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -847,7 +847,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0x2FFF), 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -860,7 +860,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0xFFFF), 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -873,7 +873,7 @@ mod tests {
         op.execute(&mut vm);
 
         assert_eq!(vm.memory.read(0xFEFF), 718);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]
@@ -884,7 +884,7 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b1100_000_110_000000.into(); // Jmp BaseR=R6
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::Rpc], 0xFF00);
+        assert_eq!(vm.registers[&Reg::RPC], 0xFF00);
     }
 
     #[test]
@@ -895,7 +895,7 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0100_0_00_000_000000.into(); // JsrR BaseR=R0
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::Rpc], 0xFF00);
+        assert_eq!(vm.registers[&Reg::RPC], 0xFF00);
         assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
@@ -906,47 +906,47 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0100_1_11111111111.into(); // Jsr offset=-1
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000 -1 );
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000 -1 );
         assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
     #[test]
     fn test_exec_br() {
         let mut vm = VM::default();
-        vm.registers.insert(Reg::Rcnd, 0b0000000000000100);
+        vm.registers.insert(Reg::RCond, 0b0000000000000100);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_100_111111111.into(); // BrN offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000 -1 );
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000 -1 );
 
         let mut vm = VM::default();
-        vm.registers.insert(Reg::Rcnd, 0b0000000000000100);
+        vm.registers.insert(Reg::RCond, 0b0000000000000100);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_011_111111111.into(); // BrN offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
 
         let mut vm = VM::default();
-        vm.registers.insert(Reg::Rcnd, 0b0000000000000010);
+        vm.registers.insert(Reg::RCond, 0b0000000000000010);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_010_111111111.into(); // BrZ offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000 -1 );
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000 -1 );
 
         let mut vm = VM::default();
-        vm.registers.insert(Reg::Rcnd, 0b0000000000000010);
+        vm.registers.insert(Reg::RCond, 0b0000000000000010);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_101_111111111.into(); // BrZ offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
 
         let mut vm = VM::default();
-        vm.registers.insert(Reg::Rcnd, 0b0000000000000001);
+        vm.registers.insert(Reg::RCond, 0b0000000000000001);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_001_111111111.into(); // BrP offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000 -1 );
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000 -1 );
 
         let mut vm = VM::default();
-        vm.registers.insert(Reg::Rcnd, 0b0000000000000001);
+        vm.registers.insert(Reg::RCond, 0b0000000000000001);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_110_111111111.into(); // BrP offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::Rpc], 0x3000);
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000);
     }
 
     #[test]

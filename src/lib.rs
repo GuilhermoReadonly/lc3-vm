@@ -32,7 +32,7 @@ where
         let mut read_result = program.read_exact(&mut buf);
 
         let mut base_address = buf[1] as u16 | (buf[0] as u16) << 8;
-        self.registers.insert(Reg::Rpc, base_address);
+        self.registers.insert(Reg::RPC, base_address);
 
         while read_result.is_ok() {
             read_result = program.read_exact(&mut buf);
@@ -47,7 +47,7 @@ where
         let mut i_count: u128 = 0;
 
         while !self.halt {
-            let current_addr = self.registers[&Reg::Rpc];
+            let current_addr = self.registers[&Reg::RPC];
             let instruction = self.memory.read(current_addr);
 
             self.inc_rpc();
@@ -69,21 +69,21 @@ where
     }
 
     fn inc_rpc(&mut self) -> u16 {
-        let next_addr = self.registers[&Reg::Rpc] + 1;
-        self.registers.insert(Reg::Rpc, next_addr);
+        let next_addr = self.registers[&Reg::RPC] + 1;
+        self.registers.insert(Reg::RPC, next_addr);
         next_addr
     }
 
     fn get_rpc(&self) -> u16 {
-        self.registers[&Reg::Rpc]
+        self.registers[&Reg::RPC]
     }
     fn set_nzp(&mut self, r: &Reg) {
         if self.registers[r] == 0 {
-            self.registers.insert(Reg::Rcnd, 1 << 1);
+            self.registers.insert(Reg::RCond, 1 << 1);
         } else if self.registers[r] >> 15 == 1 {
-            self.registers.insert(Reg::Rcnd, 1 << 2);
+            self.registers.insert(Reg::RCond, 1 << 2);
         } else {
-            self.registers.insert(Reg::Rcnd, 1 << 0);
+            self.registers.insert(Reg::RCond, 1 << 0);
         }
     }
 }
@@ -104,8 +104,8 @@ impl Default for VM<StdinLock<'_>, Stdout> {
                 (Reg::R5, 0),
                 (Reg::R6, 0),
                 (Reg::R7, 0),
-                (Reg::Rcnd, 0),
-                (Reg::Rpc, PC_START as u16),
+                (Reg::RCond, 1 << 1),
+                (Reg::RPC, PC_START as u16),
             ]),
             halt: false,
             reader: input,
@@ -127,8 +127,8 @@ impl Default for VM<&[u8], Vec<u8>> {
                 (Reg::R5, 0),
                 (Reg::R6, 0),
                 (Reg::R7, 0),
-                (Reg::Rcnd, 0),
-                (Reg::Rpc, PC_START as u16),
+                (Reg::RCond, 1 << 1),
+                (Reg::RPC, PC_START as u16),
             ]),
             halt: false,
             reader: b"",
@@ -169,8 +169,8 @@ enum Reg {
     R5,
     R6,
     R7,
-    Rpc,
-    Rcnd,
+    RPC,
+    RCond,
 }
 
 impl Reg {
