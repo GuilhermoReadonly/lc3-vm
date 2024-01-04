@@ -583,7 +583,8 @@ where
         vm.registers.insert(Reg::R7, rpc);
 
         let c = vm.registers[&Reg::R0];
-        let _ = vm.writer.write_all(&[c as u8][..]);
+        vm.writer.write_all(&[c as u8][..]).expect("write_all");
+        vm.writer.flush().expect("Writer flushed");
     }
 }
 
@@ -604,11 +605,11 @@ where
         let mut c = vm.memory.read(address);
         let mut i = 0;
         while c != 0 {
-            let buf = vec![c as u8];
-            let _ = vm.writer.write_all(buf.as_slice());
+            vm.writer.write_all(&[c as u8][..]).expect("write_all");
             i += 1;
             c = vm.memory.read(address + i);
         }
+        vm.writer.flush().expect("Writer flushed");
     }
 }
 
@@ -628,7 +629,8 @@ where
         let _ = vm.reader.read(&mut buf);
         let c = buf[0] as u16;
         vm.registers.insert(Reg::R0, c);
-        let _ = vm.writer.write_all(&buf[..]);
+        vm.writer.write_all(&[c as u8][..]).expect("write_all");
+        vm.writer.flush().expect("Writer flushed");
     }
 }
 
@@ -651,12 +653,12 @@ where
         while c != 0 {
             let num1: u8 = (c >> 8) as u8;
             let num2: u8 = (0b0000000011111111 & c) as u8;
-            let buf = vec![num1, num2];
-            let _ = vm.writer.write_all(buf.as_slice());
+            vm.writer.write_all(&[num1, num2][..]).expect("write_all");
 
             i += 1;
             c = vm.memory.read(address + i);
         }
+        vm.writer.flush().expect("Writer flushed");
     }
 }
 
@@ -717,8 +719,9 @@ where
         let c = vm.registers[&Reg::R0];
         let c_string = c.to_string();
         for character in c_string.as_bytes() {
-            let _ = vm.writer.write_all(&[*character][..]);
+            vm.writer.write_all(&[*character][..]).expect("write_all");
         }
+        vm.writer.flush().expect("Writer flushed");
     }
 }
 
@@ -906,7 +909,7 @@ mod tests {
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0100_1_11111111111.into(); // Jsr offset=-1
         op.execute(&mut vm);
 
-        assert_eq!(vm.registers[&Reg::RPC], 0x3000 -1 );
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000 - 1);
         assert_eq!(vm.registers[&Reg::R7], 0x3000);
     }
 
@@ -916,7 +919,7 @@ mod tests {
         vm.registers.insert(Reg::RCond, 0b0000000000000100);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_100_111111111.into(); // BrN offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::RPC], 0x3000 -1 );
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000 - 1);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::RCond, 0b0000000000000100);
@@ -928,7 +931,7 @@ mod tests {
         vm.registers.insert(Reg::RCond, 0b0000000000000010);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_010_111111111.into(); // BrZ offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::RPC], 0x3000 -1 );
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000 - 1);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::RCond, 0b0000000000000010);
@@ -940,7 +943,7 @@ mod tests {
         vm.registers.insert(Reg::RCond, 0b0000000000000001);
         let op: Box<dyn Instruction<&[u8], Vec<u8>>> = 0b0000_001_111111111.into(); // BrP offset=-1
         op.execute(&mut vm);
-        assert_eq!(vm.registers[&Reg::RPC], 0x3000 -1 );
+        assert_eq!(vm.registers[&Reg::RPC], 0x3000 - 1);
 
         let mut vm = VM::default();
         vm.registers.insert(Reg::RCond, 0b0000000000000001);
