@@ -7,6 +7,7 @@ const MR_KBSR: u16 = 0xFE00;
 const MR_KBDR: u16 = 0xFE02;
 
 mod instructions;
+pub mod unsafe_zone;
 use instructions::*;
 
 pub struct VM<R, W>
@@ -142,12 +143,10 @@ struct Memory {
     mem: [u16; u16::MAX as usize + 1],
 }
 fn get_key() -> Option<u16> {
-    let mut input = io::stdin();
 
-    let mut buf = [0; 2];
-    match input.read_exact(&mut buf) {
-        Err(_) => None,
-        Ok(_) => Some(buf[0] as u16),
+    match unsafe_zone::get_char(){
+        0 => None,
+        c => Some(c as u16),
     }
 }
 
