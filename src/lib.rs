@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::io::{self, Read, Stdin, Stdout, Write};
+use std::io::{self, Read, Stdout, Write};
 
 pub const PC_START: usize = 0x3000;
 const MR_KBSR: u16 = 0xFE00;
@@ -9,6 +9,24 @@ const MR_KBDR: u16 = 0xFE02;
 mod instructions;
 pub mod unsafe_zone;
 use instructions::*;
+
+pub struct LibCReader;
+
+impl Read for LibCReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let c_u8 = unsafe_zone::get_char();
+        if buf.len() == 0 {
+            return Ok(0);
+        }
+        match c_u8 {
+            0 => Ok(0),
+            c => {
+                buf[0] = c;
+                Ok(1)
+            }
+        }
+    }
+}
 
 pub struct VM<R, W>
 where
@@ -91,9 +109,9 @@ where
     }
 }
 
-impl Default for VM<Stdin, Stdout> {
+impl Default for VM<LibCReader, Stdout> {
     fn default() -> Self {
-        let input = io::stdin();
+        let input = LibCReader;
         let output = io::stdout();
         Self {
             memory: Memory::default(),
@@ -144,7 +162,7 @@ struct Memory {
 }
 
 fn get_key() -> Option<u16> {
-    match unsafe_zone::get_char(){
+    match unsafe_zone::get_char() {
         0 => None,
         c => Some(c as u16),
     }

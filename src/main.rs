@@ -1,10 +1,10 @@
 use std::{
     env,
     fs::File,
-    io::{Stdin, Stdout},
+    io::{Stdout},
 };
 
-use toy_vm::{VM, unsafe_zone};
+use toy_vm::{VM, unsafe_zone, LibCReader};
 
 
 
@@ -15,7 +15,7 @@ fn main() {
     
     unsafe_zone::disable_input_buffering();
 
-    let mut vm: VM<Stdin, Stdout> = VM::default();
+    let mut vm: VM<LibCReader, Stdout> = VM::default();
 
     let mut args = env::args();
     args.next();
