@@ -1,15 +1,17 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::io::{self, BufRead, Read, StdinLock, Stdout, Write};
+use std::io::{self, Read, Stdin, Stdout, Write};
 
 pub const PC_START: usize = 0x3000;
+const MR_KBSR: u16 = 0xFE00;
+const MR_KBDR: u16 = 0xFE02;
 
 mod instructions;
 use instructions::*;
 
 pub struct VM<R, W>
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     memory: Memory,
@@ -21,7 +23,7 @@ where
 
 impl<R, W> VM<R, W>
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     pub fn load<P>(&mut self, mut program: P)
@@ -88,10 +90,9 @@ where
     }
 }
 
-impl Default for VM<StdinLock<'_>, Stdout> {
+impl Default for VM<Stdin, Stdout> {
     fn default() -> Self {
-        let stdio = io::stdin();
-        let input = stdio.lock();
+        let input = io::stdin();
         let output = io::stdout();
         Self {
             memory: Memory::default(),
@@ -140,9 +141,28 @@ impl Default for VM<&[u8], Vec<u8>> {
 struct Memory {
     mem: [u16; u16::MAX as usize + 1],
 }
+fn get_key() -> Option<u16> {
+    let mut input = io::stdin();
+
+    let mut buf = [0; 2];
+    match input.read_exact(&mut buf) {
+        Err(_) => None,
+        Ok(_) => Some(buf[0] as u16),
+    }
+}
 
 impl Memory {
-    fn read(&self, address: u16) -> u16 {
+    fn read(&mut self, address: u16) -> u16 {
+        if address == MR_KBSR {
+            let key = get_key();
+            match key {
+                Some(c) => {
+                    self.write(MR_KBSR, 1 << 15);
+                    self.write(MR_KBDR, c);
+                }
+                None => self.write(MR_KBSR, 0x0),
+            }
+        }
         self.mem[address as usize]
     }
 

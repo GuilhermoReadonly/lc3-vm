@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::io::{BufRead, Write};
+use std::io::{Read, Write};
 
 use crate::{Reg, VM};
 
@@ -43,7 +43,7 @@ fn get_nth_bit(instruction: u16, n: usize) -> bool {
 
 pub(crate) trait Instruction<R, W>: Debug
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>);
@@ -51,7 +51,7 @@ where
 
 impl<R, W> From<u16> for Box<dyn Instruction<R, W>>
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn from(instruction: u16) -> Self {
@@ -118,7 +118,7 @@ struct AddConst {
 
 impl<R, W> Instruction<R, W> for AddConst
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -147,7 +147,7 @@ struct AddReg {
 
 impl<R, W> Instruction<R, W> for AddReg
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -176,7 +176,7 @@ struct AndConst {
 
 impl<R, W> Instruction<R, W> for AndConst
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -205,7 +205,7 @@ struct AndReg {
 
 impl<R, W> Instruction<R, W> for AndReg
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -233,7 +233,7 @@ struct Ld {
 
 impl<R, W> Instruction<R, W> for Ld
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -262,7 +262,7 @@ struct Ldi {
 
 impl<R, W> Instruction<R, W> for Ldi
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -293,7 +293,7 @@ struct Ldr {
 
 impl<R, W> Instruction<R, W> for Ldr
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -322,7 +322,7 @@ struct Lea {
 
 impl<R, W> Instruction<R, W> for Lea
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -349,7 +349,7 @@ struct St {
 
 impl<R, W> Instruction<R, W> for St
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -376,7 +376,7 @@ struct Sti {
 
 impl<R, W> Instruction<R, W> for Sti
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -405,7 +405,7 @@ struct Str {
 
 impl<R, W> Instruction<R, W> for Str
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -432,7 +432,7 @@ struct Not {
 
 impl<R, W> Instruction<R, W> for Not
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -457,7 +457,7 @@ struct Jmp {
 
 impl<R, W> Instruction<R, W> for Jmp
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -480,7 +480,7 @@ struct Jsrr {
 
 impl<R, W> Instruction<R, W> for Jsrr
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -505,7 +505,7 @@ struct Jsr {
 
 impl<R, W> Instruction<R, W> for Jsr
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -531,7 +531,7 @@ struct Br {
 
 impl<R, W> Instruction<R, W> for Br
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -556,7 +556,7 @@ struct TrapGetC;
 
 impl<R, W> Instruction<R, W> for TrapGetC
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -575,7 +575,7 @@ struct TrapOutC;
 
 impl<R, W> Instruction<R, W> for TrapOutC
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -593,7 +593,7 @@ struct TrapPuts;
 
 impl<R, W> Instruction<R, W> for TrapPuts
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -618,7 +618,7 @@ struct TrapIn;
 
 impl<R, W> Instruction<R, W> for TrapIn
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -639,7 +639,7 @@ struct TrapPutsp;
 
 impl<R, W> Instruction<R, W> for TrapPutsp
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -667,7 +667,7 @@ struct TrapHalt;
 
 impl<R, W> Instruction<R, W> for TrapHalt
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -680,7 +680,7 @@ struct TrapInu16;
 
 impl<R, W> Instruction<R, W> for TrapInu16
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
@@ -709,7 +709,7 @@ struct TrapOutu16;
 
 impl<R, W> Instruction<R, W> for TrapOutu16
 where
-    R: BufRead,
+    R: Read,
     W: Write,
 {
     fn execute(&self, vm: &mut VM<R, W>) {
