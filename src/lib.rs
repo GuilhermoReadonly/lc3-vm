@@ -142,8 +142,8 @@ impl Default for VM<&[u8], Vec<u8>> {
 struct Memory {
     mem: [u16; u16::MAX as usize + 1],
 }
-fn get_key() -> Option<u16> {
 
+fn get_key() -> Option<u16> {
     match unsafe_zone::get_char(){
         0 => None,
         c => Some(c as u16),
