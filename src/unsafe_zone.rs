@@ -1,5 +1,3 @@
-
-
 #![allow(non_camel_case_types)]
 pub type c_int = i32;
 pub type c_uchar = u8;
@@ -9,8 +7,8 @@ pub type speed_t = c_uint;
 pub type tcflag_t = c_uint;
 
 const STDIN_FILENO: i32 = 0;
-pub const ICANON: tcflag_t = 0x00000100;
-pub const ECHO: tcflag_t = 0o000010;
+pub const ICANON: tcflag_t = 0x00000002;
+pub const ECHO: tcflag_t = 0x00000008;
 pub const TCSANOW: c_int = 0;
 pub const NCCS: usize = 32;
 
@@ -52,8 +50,8 @@ pub fn restore_input_buffering() {
 }
 
 pub fn get_char() -> u8 {
-    unsafe { 
-        let c = getchar(); 
+    unsafe {
+        let c = getchar();
         return c as u8;
     };
 }
@@ -64,4 +62,3 @@ extern "C" {
     pub fn tcsetattr(fd: c_int, optional_actions: c_int, termios_p: *const termios) -> c_int;
     pub fn getchar() -> c_int;
 }
-

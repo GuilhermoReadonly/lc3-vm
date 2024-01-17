@@ -65,7 +65,7 @@ where
     }
 
     pub fn run(&mut self) {
-        let mut i_count: u128 = 0;
+        let mut _i_count: u128 = 0;
 
         while !self.halt {
             let current_addr = self.registers[&Reg::RPC];
@@ -80,13 +80,13 @@ where
             // println!(" Decoded as {op:?}");
 
             op.execute(self);
-            i_count += 1;
+            _i_count += 1;
 
             // if i_count % 100_000_000 == 0 {
             //     println!("{i_count} instructions executed.");
             // }
         }
-        println!("{i_count} instructions executed.");
+        // println!("{i_count} instructions executed.");
     }
 
     fn inc_rpc(&mut self) -> u16 {

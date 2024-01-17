@@ -1,18 +1,10 @@
-use std::{
-    env,
-    fs::File,
-    io::{Stdout},
-};
+use std::{env, fs::File, io::Stdout, time::Instant};
 
-use toy_vm::{VM, unsafe_zone, LibCReader};
-
-
-
+use toy_vm::{unsafe_zone, LibCReader, VM};
 
 fn main() {
     println!("Starting VM...");
 
-    
     unsafe_zone::disable_input_buffering();
 
     let mut vm: VM<LibCReader, Stdout> = VM::default();
@@ -25,10 +17,10 @@ fn main() {
 
     vm.load(f);
 
+    let start = Instant::now();
     vm.run();
+    let duration = start.elapsed();
+    println!("Work done in {:?}", duration);
 
     unsafe_zone::restore_input_buffering();
-
-    println!("Work done, exiting the VM !");
 }
-

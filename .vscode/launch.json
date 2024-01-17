@@ -62,6 +62,24 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug executable 'toy-vm' compute",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=toy-vm",
+                    "--package=toy-vm"
+                ],
+                "filter": {
+                    "name": "toy-vm",
+                    "kind": "bin"
+                }
+            },
+            "args": ["lc3-tools/compute.obj"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug executable 'toy-vm' adder",
             "cargo": {
                 "args": [
