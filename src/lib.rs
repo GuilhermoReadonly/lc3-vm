@@ -64,8 +64,8 @@ where
         }
     }
 
-    pub fn run(&mut self) {
-        let mut _i_count: u128 = 0;
+    pub fn run(&mut self) -> u128 {
+        let mut i_count: u128 = 0;
 
         while !self.halt {
             let current_addr = self.registers[&Reg::RPC];
@@ -80,13 +80,13 @@ where
             // println!(" Decoded as {op:?}");
 
             op.execute(self);
-            _i_count += 1;
+            i_count += 1;
 
             // if i_count % 100_000_000 == 0 {
             //     println!("{i_count} instructions executed.");
             // }
         }
-        // println!("{i_count} instructions executed.");
+        i_count
     }
 
     fn inc_rpc(&mut self) -> u16 {
@@ -275,7 +275,7 @@ mod tests {
 
         vm.load(reader);
 
-        vm.run();
+        let nb_i = vm.run();
 
         assert_eq!(vm.registers[&Reg::R0], 7);
         assert_eq!(vm.registers[&Reg::R1], 1);
@@ -285,5 +285,6 @@ mod tests {
         assert_eq!(vm.registers[&Reg::R5], 718);
         assert_eq!(vm.registers[&Reg::R6], 0);
         assert_eq!(vm.registers[&Reg::R7], 4);
+        assert_eq!(nb_i, 7);
     }
 }

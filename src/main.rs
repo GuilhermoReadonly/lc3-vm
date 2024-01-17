@@ -18,9 +18,10 @@ fn main() {
     vm.load(f);
 
     let start = Instant::now();
-    vm.run();
+    let nb_instructions = vm.run();
     let duration = start.elapsed();
-    println!("Work done in {:?}", duration);
+
+    println!("executed {nb_instructions} instructions in {:?}", duration);
 
     unsafe_zone::restore_input_buffering();
 }
